@@ -1,0 +1,109 @@
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.view-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.view h2 {
+  font-size: 1.25rem;
+  margin-bottom: 20px;
+  color: var(--text-main);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.stats-grid .card {
+  display: flex;
+  flex-direction: column;
+}
+
+.stats-grid .label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.stats-grid .value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+/* Mobile Navigation - Modern Floating Bottom Bar */
+.bottom-nav {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  height: 64px;
+  background: white;
+  border-radius: var(--radius-lg);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  border: 1px solid var(--border);
+  z-index: 1000;
+  padding: 0 8px;
+}
+
+.bottom-nav button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  gap: 2px;
+  flex: 1;
+  height: 100%;
+}
+
+.bottom-nav button span {
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.bottom-nav button.active {
+  color: var(--primary);
+}
+
+.bottom-nav button.active span {
+  color: var(--primary);
+}
+
+.pos-fab {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(30, 136, 229, 0.4);
+  background: var(--primary);
+  color: white;
+  margin-top: -30px;
+  border: 3px solid white;
+}
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: flex;
+  }
+  
+  .view-container {
+    padding-bottom: 80px; /* Space for the floating bottom nav */
+  }
+}
