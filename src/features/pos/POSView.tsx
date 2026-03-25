@@ -110,7 +110,7 @@ const POSView: React.FC = () => {
     setCart(cart.filter(item => item.product.id !== productId));
   };
 
-  const handleFinalize = async (method: string) => {
+  const handleFinalize = async (method: string, dueDate?: string) => {
     if (cart.length === 0) return;
     setIsFinishing(true);
 
@@ -150,6 +150,15 @@ const POSView: React.FC = () => {
       }
 
       if (method === 'DEBT' && selectedCustomer) {
+        // Registrar fiado individual na tabela customer_debts
+        await supabase.from('customer_debts').insert([{
+          customer_id: selectedCustomer,
+          sale_id: sale.id,
+          amount: total,
+          due_date: dueDate
+        }]);
+
+        // Atualizar total_debt do cliente
         const { data: customer } = await supabase
           .from('customers')
           .select('total_debt')
@@ -463,8 +472,9 @@ const POSView: React.FC = () => {
         .cart-drawer {
           position: fixed;
           bottom: 0;
-          left: 0;
+          left: var(--sidebar-width, 0);
           right: 0;
+          width: calc(100vw - var(--sidebar-width, 0px));
           background: white;
           border-top-left-radius: 24px;
           border-top-right-radius: 24px;
@@ -473,6 +483,27 @@ const POSView: React.FC = () => {
           flex-direction: column;
           z-index: 1100;
           padding-bottom: env(safe-area-inset-bottom);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @media (min-width: 769px) {
+          .cart-drawer {
+            top: 80px; /* Alinhado exatamente abaixo da TopBar desktop */
+            right: 0;
+            left: auto;
+            bottom: 0;
+            width: 420px;
+            max-height: calc(100vh - 80px);
+            border-radius: 0;
+            border-left: 1px solid var(--border);
+            box-shadow: -10px 0 30px rgba(0,0,0,0.05);
+            animation: slideInRight 0.3s ease-out;
+          }
+          @keyframes slideInRight {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+          }
+          .handle { display: none; }
         }
 
         @media (max-width: 768px) {
@@ -498,13 +529,47 @@ const POSView: React.FC = () => {
         .row-actions .subtotal { font-weight: 800; color: var(--primary); }
         .btn-remove { color: var(--error); padding: 4px; }
 
-        .drawer-footer { padding: 20px; border-top: 1px solid var(--border); background: #f8fafc; }
-        .total-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; font-weight: 800; font-size: 1.2rem; }
-        .total-bar .value { color: var(--primary); font-size: 1.5rem; }
+        .drawer-footer { 
+          padding: 24px; 
+          border-top: 1px solid var(--border); 
+          background: white; 
+          box-shadow: 0 -10px 25px rgba(0,0,0,0.03);
+          z-index: 10;
+        }
+        .total-bar { 
+          display: flex; 
+          justify-content: space-between; 
+          align-items: center; 
+          margin-bottom: 20px; 
+        }
+        .total-bar span:first-child {
+          font-size: 1rem;
+          font-weight: 800;
+          color: var(--text-muted);
+          text-transform: uppercase;
+        }
+        .total-bar .value { 
+          color: var(--text-main); 
+          font-size: 2rem; 
+          font-weight: 900;
+          letter-spacing: -1px;
+        }
         
         .empty-menu { grid-column: 1 / -1; text-align: center; padding: 60px; color: var(--text-muted); }
         
-        .btn-xl { padding: 16px; font-size: 1rem; border-radius: 14px; font-weight: 800; }
+        .btn-xl { 
+          padding: 18px; 
+          font-size: 1.1rem; 
+          border-radius: 16px; 
+          font-weight: 800;
+          justify-content: center;
+          align-items: center;
+          gap: 12px;
+          box-shadow: 0 10px 20px -5px rgba(59, 130, 246, 0.4);
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-xl:active { transform: scale(0.98); }
+        .btn-xl:disabled { opacity: 0.5; box-shadow: none; transform: none; }
 
         .success-overlay { z-index: 2000; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); }
         .success-card {

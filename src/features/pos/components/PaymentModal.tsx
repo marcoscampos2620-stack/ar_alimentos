@@ -6,7 +6,7 @@ interface PaymentModalProps {
   selectedCustomerId: string;
   customers: any[];
   onSelectCustomer: (id: string) => void;
-  onFinalize: (method: string) => void;
+  onFinalize: (method: string, dueDate?: string) => void;
   onClose: () => void;
   loading: boolean;
 }
@@ -23,6 +23,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [method, setMethod] = useState<string | null>(null);
   const [cashAmount, setCashAmount] = useState<string>('');
   const [change, setChange] = useState<number>(0);
+  const [dueDate, setDueDate] = useState<string>('');
 
   useEffect(() => {
     if (method === 'CASH' && cashAmount) {
@@ -37,10 +38,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     }
   }, [method, cashAmount, total]);
 
-  const canFinalize = method && (method !== 'CASH' || (parseFloat(cashAmount) >= total));
+  const canFinalize = method && (method !== 'CASH' || (parseFloat(cashAmount) >= total)) && (method !== 'DEBT' || dueDate);
 
   const handleFinalize = () => {
-    if (method) onFinalize(method);
+    if (method) onFinalize(method, method === 'DEBT' ? dueDate : undefined);
   };
 
   return (
@@ -133,6 +134,26 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 <span className="label">Troco</span>
                 <span className="value">R$ {change.toFixed(2)}</span>
               </div>
+            </div>
+          )}
+
+          {method === 'DEBT' && (
+            <div className="debt-details fade-in">
+              <div className="input-group">
+                <label>Data de Vencimento do Fiado</label>
+                <div className="amount-input">
+                  <span className="prefix">📅</span>
+                  <input 
+                    type="date" 
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    autoFocus
+                    required
+                  />
+                </div>
+              </div>
+              <p className="debt-info-text">O cliente deverá quitar até a data escolhida.</p>
             </div>
           )}
         </div>
@@ -256,6 +277,36 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         }
         .change-display .label { font-weight: 700; color: #92400e; }
         .change-display .value { font-size: 1.5rem; font-weight: 900; color: #b45309; }
+
+        .debt-details {
+          background: #eff6ff;
+          padding: 16px;
+          border-radius: 16px;
+          border: 1px solid #bfdbfe;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .debt-details .input-group label { font-size: 0.75rem; font-weight: 800; color: #1e40af; text-transform: uppercase; display: block; margin-bottom: 6px; }
+        .debt-details .amount-input {
+          display: flex;
+          align-items: center;
+          background: white;
+          border: 2px solid #60a5fa;
+          border-radius: 10px;
+          padding: 8px 12px;
+        }
+        .debt-details .amount-input .prefix { font-size: 1.1rem; }
+        .debt-details .amount-input input {
+          flex: 1;
+          border: none;
+          outline: none;
+          padding: 4px 8px;
+          font-size: 1rem;
+          font-weight: 700;
+          color: var(--text-main);
+        }
+        .debt-info-text { font-size: 0.8rem; font-weight: 600; color: #3b82f6; margin: 0; }
 
         .modal-footer { padding: 20px; border-top: 1px solid var(--border); }
         .finalize-btn { text-transform: uppercase; }

@@ -45,6 +45,7 @@ const DashboardCharts: React.FC = () => {
     leastSold: []
   });
   const [pendingBySupplier, setPendingBySupplier] = useState<any[]>([]);
+  const [debtorsRank, setDebtorsRank] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -95,6 +96,15 @@ const DashboardCharts: React.FC = () => {
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString());
 
+      // 4. Debtors List (Current state, not filtered by date)
+      const { data: debtors } = await supabase
+        .from('customers')
+        .select('name, total_debt')
+        .gt('total_debt', 0)
+        .order('total_debt', { ascending: false })
+        .limit(10);
+
+      setDebtorsRank(debtors || []);
       processChartData(sales || [], purchases || [], saleItems || [], startDate, endDate);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -297,6 +307,72 @@ const DashboardCharts: React.FC = () => {
                   />
                 </AreaChart>
               </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Debtors Chart - New Section */}
+        <div className="chart-card glass full-width">
+          <div className="chart-header">
+            <div className="flex items-center gap-3">
+              <AlertCircle size={24} className="text-red" />
+              <div>
+                <h3>Maiores Devedores (Fiado)</h3>
+                <p className="text-xs text-muted-foreground">Clientes com maiores valores pendentes de pagamento (Top 10)</p>
+              </div>
+            </div>
+          </div>
+          <div className="chart-container">
+            {loading ? (
+              <div className="loading-placeholder">Carregando dados...</div>
+            ) : debtorsRank.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart
+                  layout="vertical"
+                  data={debtorsRank}
+                  margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="rgba(0,0,0,0.05)" />
+                  <XAxis type="number" hide />
+                  <YAxis 
+                    dataKey="name" 
+                    type="category" 
+                    stroke="#475569" 
+                    fontSize={12} 
+                    tickLine={false} 
+                    axisLine={false}
+                    width={120}
+                  />
+                  <Tooltip 
+                    cursor={{fill: 'rgba(0,0,0,0.02)'}}
+                    contentStyle={{ 
+                      background: 'white', 
+                      borderRadius: '12px', 
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' 
+                    }}
+                    formatter={(value: any) => [`R$ ${Number(value).toFixed(2)}`, 'Dívida Total']}
+                  />
+                  <Bar 
+                    dataKey="total_debt" 
+                    fill="#ef4444" 
+                    radius={[0, 4, 4, 0]} 
+                    barSize={20}
+                    label={{ 
+                      position: 'right', 
+                      formatter: (val: any) => `R$ ${Number(val).toFixed(2)}`,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      fill: '#ef4444'
+                    }}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="empty-state-chart">
+                <AlertCircle size={40} className="text-green-500 mb-2" />
+                <p>Nenhum cliente com fiado pendente</p>
+              </div>
             )}
           </div>
         </div>
@@ -520,6 +596,30 @@ const DashboardCharts: React.FC = () => {
         .text-red { color: #ef4444; }
         .text-blue { color: #3b82f6; }
         .text-yellow { color: #f59e0b; }
+
+        .empty-state-chart {
+          height: 300px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          color: #64748b;
+          font-weight: 600;
+        }
+
+        .text-green-500 { color: #22c55e; }
+
+        .empty-state-chart {
+          height: 300px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          color: #64748b;
+          font-weight: 600;
+        }
+
+        .text-green-500 { color: #22c55e; }
 
         .loading-placeholder {
           height: 300px;

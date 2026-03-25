@@ -128,6 +128,11 @@ input:focus, select:focus, textarea:focus {
   background: var(--primary-dark);
 }
 
+.btn-block {
+  width: 100%;
+  display: flex;
+}
+
 .btn-secondary {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -167,7 +172,7 @@ input:focus, select:focus, textarea:focus {
 .modal-overlay {
   position: fixed;
   top: 0;
-  left: 0;
+  left: var(--sidebar-width, 0);
   right: 0;
   bottom: 0;
   background: rgba(15, 23, 42, 0.4); /* Backdrop escuro suave */
@@ -178,6 +183,8 @@ input:focus, select:focus, textarea:focus {
   padding: 20px;
   z-index: 2000;
   animation: fadeIn 0.2s ease-out;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  width: calc(100vw - var(--sidebar-width, 0px));
 }
 
 .modal-content {

@@ -26,7 +26,12 @@ export default function MainLayout({
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
-    <div className="layout-container">
+    <div 
+      className={`layout-container ${isCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}
+      style={{ 
+        '--sidebar-width': isCollapsed ? '80px' : '260px' 
+      } as React.CSSProperties}
+    >
       <Sidebar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
@@ -71,6 +76,7 @@ export default function MainLayout({
         }
         
         @media (max-width: 768px) {
+          .layout-container { --sidebar-width: 0px !important; }
           .main-viewport { padding: 16px; padding-bottom: 100px; }
         }
       `}</style>

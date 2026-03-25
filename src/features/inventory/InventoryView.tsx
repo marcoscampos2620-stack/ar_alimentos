@@ -464,7 +464,10 @@ const InventoryView: React.FC = () => {
         /* Modal & Bottom Sheet Modern */
         .modal-overlay-v2 {
           position: fixed;
-          inset: 0;
+          top: 0;
+          left: var(--sidebar-width, 0);
+          right: 0;
+          bottom: 0;
           background: rgba(15, 23, 42, 0.7);
           backdrop-filter: blur(8px);
           z-index: 1000;
@@ -472,6 +475,8 @@ const InventoryView: React.FC = () => {
           align-items: center;
           justify-content: center;
           padding: 20px;
+          transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          width: calc(100vw - var(--sidebar-width, 0px));
         }
 
         .modal-container-v2 {
