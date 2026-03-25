@@ -1,10 +1,10 @@
 import React from 'react';
+import { useSystemSettings } from '../../context/SystemSettingsContext';
 import { 
   LayoutDashboard, 
   Package, 
   ShoppingCart, 
   Users, 
-  Truck,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -28,19 +28,38 @@ const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   setIsCollapsed
 }) => {
+  const { settings } = useSystemSettings();
+
   const menuItems = [
     { id: 'dashboard', label: 'Início', icon: LayoutDashboard, access: 'dashboard' },
     { id: 'inventory', label: 'Estoque', icon: Package, access: 'inventory' },
     { id: 'pos', label: 'Vendas (PDV)', icon: ShoppingCart, access: 'pos' },
-    { id: 'sales', label: 'Histórico de Vendas', icon: Calendar, access: 'sales' },
-    { id: 'customers', label: 'Clientes / Fiados', icon: Users, access: 'customers' },
-    { id: 'purchases', label: 'Compras / Fornecedores', icon: Truck, access: 'purchases' },
+    { id: 'financial', label: 'Financeiro', icon: Calendar, access: 'sales' },
   ];
 
   return (
     <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-header">
-        {!isCollapsed && <span className="logo-text">A&R Alimentos</span>}
+        {!isCollapsed ? (
+          <div className="logo-container" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {settings?.logo_url ? (
+              <img src={settings.logo_url} alt="Logo" style={{ height: '36px', borderRadius: '8px' }} />
+            ) : (
+              <div className="logo-placeholder" style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.1)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                {settings?.system_name?.substring(0, 1) || 'A'}
+              </div>
+            )}
+            <span className="logo-text">{settings?.system_name || 'A&R Alimentos'}</span>
+          </div>
+        ) : (
+          <div className="logo-container-collapsed" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+            {settings?.logo_url ? (
+               <img src={settings.logo_url} alt="Logo" style={{ height: '30px', borderRadius: '6px' }} />
+            ) : (
+              <span className="logo-text-short" style={{ fontWeight: 'bold' }}>{settings?.system_name?.substring(0, 1) || 'A'}</span>
+            )}
+          </div>
+        )}
         <button className="collapse-btn" onClick={() => setIsCollapsed(!isCollapsed)}>
           {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
         </button>
@@ -63,15 +82,27 @@ const Sidebar: React.FC<SidebarProps> = ({
         ))}
 
         {isAdmin && (
-          <button 
-            className={`nav-item admin-item ${activeTab === 'users' ? 'active' : ''}`}
-            onClick={() => setActiveTab('users')}
-            title={isCollapsed ? 'Gestão de Acessos' : ''}
-          >
-            <Settings size={22} />
-            {!isCollapsed && <span>Acessos</span>}
-            {activeTab === 'users' && !isCollapsed && <div className="active-indicator" />}
-          </button>
+          <>
+            <button 
+              className={`nav-item admin-item ${activeTab === 'personnel' ? 'active' : ''}`}
+              onClick={() => setActiveTab('personnel')}
+              title={isCollapsed ? 'Gestão de Pessoal' : ''}
+            >
+              <Users size={22} />
+              {!isCollapsed && <span>Pessoal/Clientes</span>}
+              {activeTab === 'personnel' && !isCollapsed && <div className="active-indicator" />}
+            </button>
+            <button 
+              className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => setActiveTab('settings')}
+              title={isCollapsed ? 'Configurações do Sistema' : ''}
+              style={{ marginTop: '8px' }}
+            >
+              <Settings size={22} />
+              {!isCollapsed && <span>Configurações</span>}
+              {activeTab === 'settings' && !isCollapsed && <div className="active-indicator" />}
+            </button>
+          </>
         )}
       </nav>
 

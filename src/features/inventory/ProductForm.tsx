@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../config/supabase';
-import { Plus, Check, X } from 'lucide-react';
+import { Plus, Check, X, Upload, Image as ImageIcon } from 'lucide-react';
 
 interface Category {
   id: string;
@@ -15,6 +15,7 @@ interface Product {
   stock_quantity: number;
   category_id?: string;
   image_url?: string;
+  is_paused?: boolean;
 }
 
 interface ProductFormProps {
@@ -30,11 +31,15 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
   const [stock, setStock] = useState(product?.stock_quantity.toString() || '');
   const [categoryId, setCategoryId] = useState(product?.category_id || '');
   const [imageUrl, setImageUrl] = useState(product?.image_url || '');
+  const [isPaused, setIsPaused] = useState(product?.is_paused || false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [showNewCategoryForm, setShowNewCategoryForm] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [creatingCategory, setCreatingCategory] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchCategories();
@@ -71,17 +76,47 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
     }
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+      const filePath = `products/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('products')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('products')
+        .getPublicUrl(filePath);
+
+      setImageUrl(publicUrl);
+    } catch (error: any) {
+      alert('Erro no upload: ' + error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
+    const newStockVal = parseFloat(stock);
+    const oldStockVal = product?.stock_quantity || 0;
 
     const productData = { 
       name, 
       unit_type: unitType, 
       price: parseFloat(price), 
-      stock_quantity: parseFloat(stock),
+      stock_quantity: newStockVal,
       category_id: categoryId || null,
-      image_url: imageUrl || null
+      image_url: imageUrl || null,
+      is_paused: isPaused
     };
 
     let error;
@@ -91,11 +126,34 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
         .update(productData)
         .eq('id', product.id);
       error = err;
+
+      // Log movement if stock changed
+      if (!error && newStockVal !== oldStockVal) {
+        await supabase.from('stock_movements').insert([{
+          product_id: product.id,
+          quantity: newStockVal - oldStockVal,
+          type: newStockVal > oldStockVal ? 'in' : 'out',
+          reason: 'Edição de Configurações'
+        }]);
+      }
     } else {
-      const { error: err } = await supabase
+      const { data, error: err } = await supabase
         .from('products')
-        .insert([productData]);
+        .insert([productData])
+        .select()
+        .single();
+      
       error = err;
+
+      // Log initial movement
+      if (!error && data) {
+        await supabase.from('stock_movements').insert([{
+          product_id: data.id,
+          quantity: newStockVal,
+          type: 'in',
+          reason: 'Cadastro Inicial'
+        }]);
+      }
     }
 
     if (!error) {
@@ -207,7 +265,47 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
           />
         </div>
         <div className="form-group">
-          <label className="form-label">URL da Imagem (Opcional)</label>
+          <label className="form-label">Imagem do Produto (Opcional)</label>
+          <div className="image-upload-wrapper">
+            {imageUrl ? (
+              <div className="image-preview-v2">
+                <img src={imageUrl} alt="Preview" />
+                <button type="button" className="btn-remove-img" onClick={() => setImageUrl('')}>
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <button 
+                type="button" 
+                className="btn-upload-v2" 
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploading ? (
+                  <span className="spinner"></span>
+                ) : (
+                  <>
+                    <Upload size={20} />
+                    <span>Upload Foto</span>
+                  </>
+                )}
+              </button>
+            )}
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden-input" 
+              accept="image/*" 
+              onChange={handleImageUpload} 
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Link Externo da Imagem (Alternativo)</label>
+        <div className="input-with-icon">
+          <ImageIcon size={18} className="input-icon" />
           <input 
             type="text" 
             value={imageUrl} 
@@ -215,6 +313,18 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
             placeholder="https://exemplo.com/foto.jpg"
           />
         </div>
+      </div>
+
+      <div className="form-group checkbox-group">
+        <label className="checkbox-container">
+          <input 
+            type="checkbox" 
+            checked={!isPaused} 
+            onChange={(e) => setIsPaused(!e.target.checked)} 
+          />
+          <span className="checkmark"></span>
+          <span className="checkbox-label">Item Ativo (Mostrar no PDV)</span>
+        </label>
       </div>
       
       <div className="form-actions">
@@ -274,6 +384,99 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
         
         .animate-fade-in { animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .hidden-input { display: none; }
+        .image-upload-wrapper { display: flex; gap: 12px; align-items: center; }
+        .btn-upload-v2 {
+          flex: 1;
+          height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          background: #f8fafc;
+          border: 2px dashed #cbd5e1;
+          border-radius: 12px;
+          color: #64748b;
+          font-weight: 700;
+          cursor: pointer;
+          transition: 0.2s;
+        }
+        .btn-upload-v2:hover { background: #f1f5f9; border-color: var(--primary); color: var(--primary); }
+        
+        .image-preview-v2 {
+          width: 80px;
+          height: 60px;
+          border-radius: 8px;
+          overflow: hidden;
+          position: relative;
+          border: 1px solid var(--border);
+        }
+        .image-preview-v2 img { width: 100%; height: 100%; object-fit: cover; }
+        .btn-remove-img {
+          position: absolute;
+          top: 2px;
+          right: 2px;
+          background: rgba(239, 68, 68, 0.9);
+          color: white;
+          border: none;
+          border-radius: 4px;
+          padding: 2px;
+          cursor: pointer;
+        }
+
+        .input-with-icon { position: relative; }
+        .input-with-icon .input-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+        .input-with-icon input { padding-left: 40px; }
+
+        .spinner {
+          width: 20px;
+          height: 20px;
+          border: 3px solid rgba(0,0,0,0.1);
+          border-top-color: var(--primary);
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        .checkbox-group { margin-top: 10px; }
+        .checkbox-container {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          cursor: pointer;
+          font-weight: 700;
+          color: var(--text-main);
+          user-select: none;
+        }
+        .checkbox-container input { display: none; }
+        .checkmark {
+          width: 24px;
+          height: 24px;
+          background: #f1f5f9;
+          border: 2px solid var(--border);
+          border-radius: 6px;
+          position: relative;
+          transition: 0.2s;
+        }
+        .checkbox-container input:checked ~ .checkmark {
+          background: var(--primary);
+          border-color: var(--primary);
+        }
+        .checkmark:after {
+          content: "";
+          position: absolute;
+          display: none;
+          left: 7px;
+          top: 3px;
+          width: 6px;
+          height: 12px;
+          border: solid white;
+          border-width: 0 3px 3px 0;
+          transform: rotate(45deg);
+        }
+        .checkbox-container input:checked ~ .checkmark:after {
+          display: block;
+        }
+        .checkbox-label { font-size: 0.95rem; }
       `}</style>
     </form>
   );

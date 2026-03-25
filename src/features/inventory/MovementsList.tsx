@@ -22,6 +22,19 @@ const MovementsList: React.FC = () => {
 
   useEffect(() => {
     fetchMovements();
+
+    const channel = supabase
+      .channel('realtime_movements')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'stock_movements' },
+        () => fetchMovements()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchMovements = async () => {
@@ -69,14 +82,17 @@ const MovementsList: React.FC = () => {
             
             <div className="movement-info">
               <span className="product-name">{m.products?.name || 'Produto Removido'}</span>
-              <span className="movement-details">
-                {m.reason} • {new Intl.DateTimeFormat('pt-BR', { 
-                  day: '2-digit', 
-                  month: 'short', 
-                  hour: '2-digit', 
-                  minute: '2-digit' 
-                }).format(new Date(m.created_at))}
-              </span>
+              <div className="movement-meta">
+                <span className="reason-badge">{m.reason}</span>
+                <span className="movement-date">
+                  {new Intl.DateTimeFormat('pt-BR', { 
+                    day: '2-digit', 
+                    month: 'short', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  }).format(new Date(m.created_at))}
+                </span>
+              </div>
             </div>
 
             <div className={`movement-value ${m.quantity > 0 ? 'positive' : 'negative'}`}>
@@ -132,9 +148,21 @@ const MovementsList: React.FC = () => {
         .movement-icon.in { background: #f0fdf4; color: var(--success); }
         .movement-icon.out { background: #fef2f2; color: var(--error); }
 
-        .movement-info { display: flex; flex-direction: column; flex: 1; }
+        .movement-info { display: flex; flex-direction: column; flex: 1; gap: 4px; }
         .movement-info .product-name { font-weight: 700; color: var(--text-main); font-size: 0.95rem; }
-        .movement-info .movement-details { font-size: 0.75rem; color: var(--text-muted); text-transform: capitalize; }
+        
+        .movement-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .reason-badge { 
+          font-size: 0.7rem; 
+          font-weight: 700; 
+          padding: 2px 8px; 
+          border-radius: 4px; 
+          background: #f1f5f9; 
+          color: #475569;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+        }
+        .movement-date { font-size: 0.75rem; color: var(--text-muted); }
 
         .movement-value { font-weight: 800; font-size: 1.1rem; text-align: right; display: flex; align-items: baseline; gap: 4px; }
         .movement-value.positive { color: var(--success); }

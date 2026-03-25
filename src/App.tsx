@@ -4,16 +4,15 @@ import {
   Package, 
   ShoppingCart, 
   Users, 
-  Settings,
   Calendar
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import InventoryView from './features/inventory/InventoryView';
 import POSView from './features/pos/POSView';
-import CustomersView from './features/customers/CustomersView';
 import DashboardView from './features/dashboard/DashboardView';
-import PurchasesView from './features/purchases/PurchasesView';
-import SalesView from './features/sales/SalesView';
+import FinancialView from './features/financial/FinancialView';
+import PersonnelView from './features/personnel/PersonnelView';
+import SystemSettingsView from './features/settings/SystemSettingsView';
 import UsersManagementView from './features/admin/UsersManagementView';
 import LoginView from './features/auth/LoginView';
 import MainLayout from './features/layout/MainLayout';
@@ -59,9 +58,9 @@ function AppContent() {
         {activeTab === 'dashboard' && hasAccess('dashboard') && <DashboardView />}
         {activeTab === 'inventory' && hasAccess('inventory') && <InventoryView />}
         {activeTab === 'pos' && hasAccess('pos') && <POSView />}
-        {activeTab === 'sales' && hasAccess('sales') && <SalesView />}
-        {activeTab === 'customers' && hasAccess('customers') && <CustomersView />}
-        {activeTab === 'purchases' && hasAccess('purchases') && <PurchasesView />}
+        {activeTab === 'financial' && (hasAccess('sales') || hasAccess('purchases')) && <FinancialView />}
+        {activeTab === 'personnel' && isAdmin && <PersonnelView />}
+        {activeTab === 'settings' && isAdmin && <SystemSettingsView />}
         {activeTab === 'users' && isAdmin && <UsersManagementView />}
         
         {!hasAccess(activeTab) && (
@@ -93,22 +92,16 @@ function AppContent() {
             </div>
           </button>
         )}
-        {hasAccess('sales') && (
-          <button className={activeTab === 'sales' ? 'active' : ''} onClick={() => setActiveTab('sales')}>
+        {(hasAccess('sales') || hasAccess('purchases')) && (
+          <button className={activeTab === 'financial' ? 'active' : ''} onClick={() => setActiveTab('financial')}>
             <Calendar size={20} />
-            <span>Vendas</span>
-          </button>
-        )}
-        {hasAccess('customers') && (
-          <button className={activeTab === 'customers' ? 'active' : ''} onClick={() => setActiveTab('customers')}>
-            <Users size={20} />
-            <span>Fiados</span>
+            <span>Financeiro</span>
           </button>
         )}
         {isAdmin && (
-          <button className={activeTab === 'users' ? 'active' : ''} onClick={() => setActiveTab('users')}>
-            <Settings size={20} />
-            <span>Acessos</span>
+          <button className={activeTab === 'personnel' ? 'active' : ''} onClick={() => setActiveTab('personnel')}>
+            <Users size={20} />
+            <span>Pessoal</span>
           </button>
         )}
       </nav>
@@ -116,10 +109,14 @@ function AppContent() {
   );
 }
 
+import { SystemSettingsProvider } from './context/SystemSettingsContext';
+
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <SystemSettingsProvider>
+        <AppContent />
+      </SystemSettingsProvider>
     </AuthProvider>
   );
 }

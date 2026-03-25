@@ -61,33 +61,38 @@ const StockMovementForm: React.FC<StockMovementFormProps> = ({ product, onClose,
   };
 
   return (
-    <div className="stock-inline-form animate-slide-down">
-      <div className="inline-form-header">
-        <span className="title">Movimentar Estoque</span>
-        <button className="btn-close-mini" onClick={onClose}><X size={14} /></button>
+    <div className="stock-modal-form">
+      <div className="modal-header">
+        <div className="product-info-mini">
+          <h3>{product.name}</h3>
+          <span className="stock-current">Estoque atual: <strong>{product.stock_quantity.toFixed(product.unit_type === 'KG' ? 3 : 0)} {product.unit_type}</strong></span>
+        </div>
+        <button className="btn-close-modal" onClick={onClose}><X size={20} /></button>
       </div>
 
-      <div className="type-toggle-mini">
+      <div className="type-selector-modern">
         <button 
           type="button" 
-          className={`toggle-btn in ${type === 'in' ? 'active' : ''}`}
+          className={`type-btn in ${type === 'in' ? 'active' : ''}`}
           onClick={() => setType('in')}
         >
-          <ArrowUpCircle size={14} /> Entrada
+          <ArrowUpCircle size={24} />
+          <span>Entrada</span>
         </button>
         <button 
           type="button" 
-          className={`toggle-btn out ${type === 'out' ? 'active' : ''}`}
+          className={`type-btn out ${type === 'out' ? 'active' : ''}`}
           onClick={() => setType('out')}
         >
-          <ArrowDownCircle size={14} /> Saída
+          <ArrowDownCircle size={24} />
+          <span>Saída</span>
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="mini-form-body">
-        <div className="input-row">
-          <div className="mini-group">
-            <label>Qtd ({product.unit_type})</label>
+      <form onSubmit={handleSubmit} className="modal-form-body">
+        <div className="input-grid">
+          <div className="form-field">
+            <label>Quantidade ({product.unit_type})</label>
             <input 
               required
               autoFocus
@@ -96,115 +101,105 @@ const StockMovementForm: React.FC<StockMovementFormProps> = ({ product, onClose,
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
               placeholder="0.00"
+              className="large-input"
             />
           </div>
           
-          <div className="mini-group">
-            <label>Motivo</label>
-            <select value={reason} onChange={(e) => setReason(e.target.value)}>
-              <option value="Ajuste">Ajuste</option>
-              <option value="Compra">Compra</option>
-              <option value="Avaria">Avaria</option>
-              <option value="Consumo">Consumo</option>
+          <div className="form-field">
+            <label>Motivo da Movimentação</label>
+            <select value={reason} onChange={(e) => setReason(e.target.value)} className="large-select">
+              <option value="Ajuste Manual">Ajuste Manual</option>
+              <option value="Entrada de Compra">Entrada de Compra</option>
+              <option value="Avaria / Perda">Avaria / Perda</option>
+              <option value="Consumo Próprio">Consumo Próprio</option>
+              <option value="Outros">Outros</option>
             </select>
           </div>
         </div>
 
-        <button type="submit" className={`btn-submit-mini ${type}`} disabled={loading}>
-          {loading ? '...' : <Check size={18} />}
-          <span>{loading ? 'Salvando' : 'Confirmar'}</span>
-        </button>
+        <div className="modal-actions">
+          <button type="button" className="btn-cancel" onClick={onClose}>Cancelar</button>
+          <button type="submit" className={`btn-submit-modern ${type}`} disabled={loading}>
+            {loading ? <span className="spinner-mini"></span> : <Check size={20} />}
+            <span>{loading ? 'Salvando...' : 'Confirmar Movimentação'}</span>
+          </button>
+        </div>
       </form>
 
       <style>{`
-        .stock-inline-form {
-          background: #f8fafc;
-          border-radius: var(--radius-sm);
-          padding: 12px;
-          margin-top: 12px;
-          border: 1px dashed var(--border);
-        }
-        .inline-form-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 10px;
-        }
-        .inline-form-header .title {
-          font-size: 0.75rem;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          color: var(--text-muted);
-        }
-        .btn-close-mini {
-          background: none;
-          border: none;
-          color: var(--text-muted);
-          cursor: pointer;
-          padding: 2px;
-        }
-
-        .type-toggle-mini {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 6px;
-          margin-bottom: 12px;
-        }
-        .toggle-btn {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 4px;
-          padding: 6px;
-          border: 1px solid var(--border);
-          background: white;
-          border-radius: 6px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          color: var(--text-muted);
-          transition: all 0.2s;
-        }
-        .toggle-btn.in.active { border-color: var(--success); color: var(--success); background: #f0fdf4; }
-        .toggle-btn.out.active { border-color: var(--error); color: var(--error); background: #fef2f2; }
-
-        .mini-form-body { display: flex; flex-direction: column; gap: 10px; }
-        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .stock-modal-form { padding: 24px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+        .product-info-mini h3 { font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 4px; }
+        .stock-current { font-size: 0.85rem; color: var(--text-muted); }
+        .stock-current strong { color: var(--primary); }
         
-        .mini-group { display: flex; flex-direction: column; gap: 4px; }
-        .mini-group label { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); }
-        .mini-group input, .mini-group select {
-          padding: 6px 8px;
-          font-size: 0.85rem;
-          border: 1px solid var(--border);
-          border-radius: 6px;
-          background: white;
-        }
+        .btn-close-modal { background: #f1f5f9; border: none; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); cursor: pointer; transition: 0.2s; }
+        .btn-close-modal:hover { background: #fee2e2; color: #ef4444; }
 
-        .btn-submit-mini {
+        .type-selector-modern { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+        .type-btn {
           display: flex;
+          flex-direction: column;
           align-items: center;
-          justify-content: center;
-          gap: 6px;
-          padding: 8px;
-          border-radius: 6px;
+          gap: 8px;
+          padding: 16px;
+          border-radius: 16px;
+          border: 2px solid var(--border);
+          background: white;
+          color: var(--text-muted);
+          font-weight: 800;
+          cursor: pointer;
+          transition: 0.2s;
+        }
+        .type-btn.in.active { border-color: #10b981; color: #10b981; background: #f0fdf4; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.1); }
+        .type-btn.out.active { border-color: #ef4444; color: #ef4444; background: #fef2f2; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1); }
+
+        .modal-form-body { display: flex; flex-direction: column; gap: 20px; }
+        .input-grid { display: grid; gap: 16px; }
+        .form-field { display: flex; flex-direction: column; gap: 8px; }
+        .form-field label { font-size: 0.85rem; font-weight: 700; color: var(--text-muted); }
+        
+        .large-input, .large-select {
+          height: 52px;
+          padding: 0 16px;
+          border-radius: 12px;
+          border: 1.5px solid var(--border);
+          font-size: 1rem;
+          font-weight: 600;
+          outline: none;
+          transition: 0.2s;
+        }
+        .large-input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
+
+        .modal-actions { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-top: 12px; }
+        .btn-cancel { height: 52px; border-radius: 12px; border: 1.5px solid var(--border); background: white; color: var(--text-muted); font-weight: 700; cursor: pointer; }
+        .btn-submit-modern {
+          height: 52px;
+          border-radius: 12px;
           border: none;
           color: white;
-          font-weight: 700;
-          font-size: 0.85rem;
+          font-weight: 800;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
           cursor: pointer;
-          transition: filter 0.2s;
+          transition: 0.2s;
         }
-        .btn-submit-mini.in { background: var(--success); shadow: 0 2px 4px rgba(34, 197, 94, 0.2); }
-        .btn-submit-mini.out { background: var(--error); shadow: 0 2px 4px rgba(239, 68, 68, 0.2); }
-        .btn-submit-mini:hover { filter: brightness(1.1); }
-        .btn-submit-mini:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-submit-modern.in { background: #10b981; box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3); }
+        .btn-submit-modern.out { background: #ef4444; box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3); }
+        .btn-submit-modern:hover { transform: translateY(-2px); filter: brightness(1.1); }
+        .btn-submit-modern:disabled { opacity: 0.5; transform: none; }
 
-        @keyframes slideDown {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
+        .spinner-mini {
+          width: 20px;
+          height: 20px;
+          border: 3px solid rgba(255,255,255,0.3);
+          border-top-color: white;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
         }
-        .animate-slide-down { animation: slideDown 0.3s ease-out; }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );

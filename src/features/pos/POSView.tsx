@@ -8,6 +8,9 @@ import ProductCard from './components/ProductCard';
 import FloatingCart from './components/FloatingCart';
 import PaymentModal from './components/PaymentModal';
 import QuantityModal from './components/QuantityModal';
+import SaleTypeModal from './components/SaleTypeModal';
+import QuickCustomerForm from './components/QuickCustomerForm';
+import CustomerSelectionModal from './components/CustomerSelectionModal';
 
 interface Product {
   id: string;
@@ -17,6 +20,7 @@ interface Product {
   stock_quantity: number;
   category_id?: string;
   image_url?: string;
+  is_paused?: boolean;
 }
 
 interface Category {
@@ -41,6 +45,10 @@ const POSView: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   
+  // Fluxo de tipo de venda: choosing | selectingCustomer | registeringCustomer | active
+  const [saleMode, setSaleMode] = useState<'choosing' | 'selectingCustomer' | 'registeringCustomer' | 'active'>('choosing');
+  const [selectedCustomerName, setSelectedCustomerName] = useState<string>('');
+
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
@@ -53,6 +61,17 @@ const POSView: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+
+    const channel = supabase
+      .channel('pos-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchData = async () => {
@@ -152,6 +171,7 @@ const POSView: React.FC = () => {
 
       setCart([]);
       setSelectedCustomer('');
+      setSelectedCustomerName('');
       setShowPayment(false);
       setShowCartSummary(false);
       fetchData();
@@ -165,13 +185,73 @@ const POSView: React.FC = () => {
   const total = cart.reduce((acc, item) => acc + item.subtotal, 0);
 
   const filteredProducts = products.filter(p => {
+    const isAvailable = !p.is_paused;
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategoryId === 'all' || p.category_id === selectedCategoryId;
-    return matchesSearch && matchesCategory;
+    return isAvailable && matchesSearch && matchesCategory;
   });
 
   return (
     <div className="view pos-container">
+      {/* Modal de escolha do tipo de venda */}
+      {saleMode === 'choosing' && (
+        <SaleTypeModal
+          onQuickSale={() => {
+            setSelectedCustomer('');
+            setSelectedCustomerName('');
+            setSaleMode('active');
+          }}
+          onCustomerSale={() => setSaleMode('selectingCustomer')}
+          onClose={() => setSaleMode('active')}
+        />
+      )}
+
+      {/* Busca/Seleção de cliente cadastrado */}
+      {saleMode === 'selectingCustomer' && (
+        <CustomerSelectionModal
+          onSelect={(id, name) => {
+            setSelectedCustomer(id);
+            setSelectedCustomerName(name);
+            setSaleMode('active');
+          }}
+          onNewCustomer={() => setSaleMode('registeringCustomer')}
+          onBack={() => setSaleMode('choosing')}
+        />
+      )}
+
+      {/* Formulário de cadastro rápido de cliente */}
+      {saleMode === 'registeringCustomer' && (
+        <QuickCustomerForm
+          onClose={() => setSaleMode('selectingCustomer')}
+          onCustomerCreated={(customerId, customerName) => {
+            setSelectedCustomer(customerId);
+            setSelectedCustomerName(customerName);
+            setSaleMode('active');
+            fetchData();
+          }}
+        />
+      )}
+
+      {/* Interface Principal do PDV: Só aparece quando o cliente já foi definido */}
+      {saleMode === 'active' && (
+        <div className="pos-active-layout fade-in">
+          {/* Indicador de cliente selecionado */}
+          {selectedCustomerName && (
+            <div className="customer-banner fade-in">
+              <span>👤 Cliente: <strong>{selectedCustomerName}</strong></span>
+              <button 
+                onClick={() => { 
+                  setSelectedCustomer(''); 
+                  setSelectedCustomerName(''); 
+                  setSaleMode('choosing'); 
+                }}
+                title="Mudar Cliente"
+              >
+                Mudar
+              </button>
+            </div>
+          )}
+
       <div className="pos-header">
         <div className="header-top">
           <h2>Cardápio</h2>
@@ -219,6 +299,8 @@ const POSView: React.FC = () => {
           onClick={() => setShowCartSummary(true)} 
         />
       )}
+    </div>
+  )}
 
       {/* Cart Summary Drawer/Modal */}
       {showCartSummary && (
@@ -318,7 +400,10 @@ const POSView: React.FC = () => {
 
             <button 
               className="btn-primary btn-block btn-xl"
-              onClick={() => setSaleSuccess(null)}
+              onClick={() => {
+                setSaleSuccess(null);
+                setSaleMode('choosing');
+              }}
             >
               Nova Venda
             </button>
@@ -329,6 +414,30 @@ const POSView: React.FC = () => {
       <style>{`
         .pos-container { padding-bottom: 100px; position: relative; min-height: 100vh; }
         .pos-header { position: sticky; top: 0; background: var(--bg-main); z-index: 100; padding-top: 10px; }
+
+        .customer-banner {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 16px;
+          background: #dbeafe;
+          border: 1px solid #93c5fd;
+          border-radius: 12px;
+          margin-bottom: 12px;
+          font-size: 0.88rem;
+          font-weight: 600;
+          color: #1e40af;
+        }
+        .customer-banner button {
+          background: none;
+          border: none;
+          font-size: 1.1rem;
+          cursor: pointer;
+          color: #1e40af;
+          padding: 2px 6px;
+          border-radius: 6px;
+        }
+        .customer-banner button:hover { background: rgba(30,64,175,0.1); }
         .header-top { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 15px; }
         .header-top h2 { font-weight: 900; font-size: 1.8rem; color: var(--text-main); }
         

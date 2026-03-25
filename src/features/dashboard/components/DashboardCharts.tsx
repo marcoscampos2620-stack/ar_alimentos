@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-  PieChart, Pie, Cell 
+  AreaChart, Area
 } from 'recharts';
 import { supabase } from '../../../config/supabase';
 import { 
   ChevronLeft, 
   ChevronRight, 
-  ArrowDownCircle, 
-  ArrowUpCircle,
-  PackageCheck,
-  Filter
+  TrendingUp,
+  AlertCircle,
+  Trophy,
+  Activity
 } from 'lucide-react';
 import { 
   format, 
@@ -44,7 +44,7 @@ const DashboardCharts: React.FC = () => {
     mostSold: [],
     leastSold: []
   });
-  const [stockStats, setStockStats] = useState<any[]>([]);
+  const [pendingBySupplier, setPendingBySupplier] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -76,10 +76,15 @@ const DashboardCharts: React.FC = () => {
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString());
 
-      // 2. Purchases (Accounts)
+      // 2. Purchases (Accounts) - Joined with suppliers
       const { data: purchases } = await supabase
         .from('purchases')
-        .select('*')
+        .select(`
+          *,
+          suppliers (
+            name
+          )
+        `)
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString());
 
@@ -90,14 +95,7 @@ const DashboardCharts: React.FC = () => {
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString());
 
-      // 4. Stock Movements
-      const { data: movements } = await supabase
-        .from('stock_movements')
-        .select('*')
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endDate.toISOString());
-
-      processChartData(sales || [], purchases || [], saleItems || [], movements || [], startDate, endDate);
+      processChartData(sales || [], purchases || [], saleItems || [], startDate, endDate);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -105,8 +103,8 @@ const DashboardCharts: React.FC = () => {
     }
   };
 
-  const processChartData = (sales: any[], purchases: any[], saleItems: any[], movements: any[], start: Date, end: Date) => {
-    // Process Sales & Finance & Stock by day or month depending on mode
+  const processChartData = (sales: any[], purchases: any[], saleItems: any[], start: Date, end: Date) => {
+    // Process Sales & Finance by day or month depending on mode
     if (filterMode === 'monthly' || filterMode === 'custom') {
       const days = eachDayOfInterval({ start, end });
       const chartData = days.map(day => {
@@ -117,25 +115,14 @@ const DashboardCharts: React.FC = () => {
         const paid = dayPurchases.filter(p => p.status === 'PAID').reduce((acc, p) => acc + Number(p.total_amount), 0);
         const pending = dayPurchases.filter(p => p.status === 'PENDING').reduce((acc, p) => acc + Number(p.total_amount), 0);
 
-        const dayMovements = movements.filter(m => isSameDay(parseISO(m.created_at), day));
-        const entradas = dayMovements
-          .filter(m => Number(m.quantity) > 0)
-          .reduce((acc, m) => acc + Number(m.quantity), 0);
-        const saidas = dayMovements
-          .filter(m => Number(m.quantity) < 0)
-          .reduce((acc, m) => acc + Math.abs(Number(m.quantity)), 0);
-
         return {
           name: format(day, 'dd/MM'),
           vendas: totalSales,
           pago: paid,
-          pendente: pending,
-          entradas,
-          saidas
+          pendente: pending
         };
       });
       setFinanceData(chartData);
-      setStockStats(chartData);
     } else {
       // Annual mode - group by month
       const months = eachMonthOfInterval({ start, end });
@@ -153,29 +140,26 @@ const DashboardCharts: React.FC = () => {
         const paid = monthPurchases.filter(p => p.status === 'PAID').reduce((acc, p) => acc + Number(p.total_amount), 0);
         const pending = monthPurchases.filter(p => p.status === 'PENDING').reduce((acc, p) => acc + Number(p.total_amount), 0);
 
-        const monthMovements = movements.filter(m => {
-          const d = parseISO(m.created_at);
-          return d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear();
-        });
-        const entradas = monthMovements
-          .filter(m => Number(m.quantity) > 0)
-          .reduce((acc, m) => acc + Number(m.quantity), 0);
-        const saidas = monthMovements
-          .filter(m => Number(m.quantity) < 0)
-          .reduce((acc, m) => acc + Math.abs(Number(m.quantity)), 0);
-
         return {
           name: format(month, 'MMM', { locale: ptBR }),
           vendas: totalSales,
           pago: paid,
-          pendente: pending,
-          entradas,
-          saidas
+          pendente: pending
         };
       });
       setFinanceData(chartData);
-      setStockStats(chartData);
     }
+
+    // Process Pending by Supplier
+    const supplierMap: Record<string, number> = {};
+    purchases.filter(p => p.status === 'PENDING').forEach(p => {
+      const name = p.suppliers?.name || 'Sem Fornecedor';
+      supplierMap[name] = (supplierMap[name] || 0) + Number(p.total_amount);
+    });
+    const sortedSuppliers = Object.entries(supplierMap)
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount);
+    setPendingBySupplier(sortedSuppliers);
 
     // Process Product Ranking
     const productMap: Record<string, { name: string; quantity: number }> = {};
@@ -193,8 +177,6 @@ const DashboardCharts: React.FC = () => {
       leastSold: sortedProducts.slice(-5).reverse()
     });
   };
-
-  const COLORS = ['#4ade80', '#f87171', '#60a5fa', '#fbbf24', '#a78bfa'];
 
   return (
     <div className="charts-wrapper">
@@ -256,118 +238,158 @@ const DashboardCharts: React.FC = () => {
       </div>
 
       <div className="charts-grid">
-        {/* Stock Movements Chart */}
-
-        {/* Stock Movements Chart */}
-        <div className="chart-card glass">
+        {/* Sales Wave Chart */}
+        <div className="chart-card glass full-width">
           <div className="chart-header">
-            <PackageCheck size={20} className="text-purple" />
-            <h3>Movimentação de Estoque (Qtd)</h3>
+            <div className="flex items-center gap-3">
+              <TrendingUp size={24} className="text-accent" />
+              <div>
+                <h3>Desempenho de Vendas</h3>
+                <p className="text-xs text-muted-foreground">Volume de vendas diárias e picos de demanda</p>
+              </div>
+            </div>
           </div>
-          <div className="chart-container">
+          <div className="chart-container sales-wave">
             {loading ? (
               <div className="loading-placeholder">Carregando dados...</div>
             ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={stockStats}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip 
-                    contentStyle={{ background: 'rgba(255,255,255,0.9)', borderRadius: '8px', border: 'none' }}
+              <ResponsiveContainer width="100%" height={350}>
+                <AreaChart data={financeData}>
+                  <defs>
+                    <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="var(--accent)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="#94a3b8" 
+                    fontSize={12} 
+                    tickLine={false} 
+                    axisLine={false}
+                    dy={10}
                   />
-                  <Legend />
-                  <Bar dataKey="entradas" fill="#4ade80" radius={[4, 4, 0, 0]} name="Entradas" />
-                  <Bar dataKey="saidas" fill="#f87171" radius={[4, 4, 0, 0]} name="Saídas" />
-                </BarChart>
+                  <YAxis 
+                    stroke="#94a3b8" 
+                    fontSize={12} 
+                    tickLine={false} 
+                    axisLine={false} 
+                    tickFormatter={(value) => `R$ ${value}`}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      background: 'rgba(255,255,255,0.95)', 
+                      borderRadius: '12px', 
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
+                    }}
+                    formatter={(value: any) => [`R$ ${Number(value).toFixed(2)}`, 'Vendas']}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="vendas" 
+                    stroke="var(--accent)" 
+                    strokeWidth={4} 
+                    fillOpacity={1} 
+                    fill="url(#colorSales)" 
+                    activeDot={{ r: 8, strokeWidth: 0, fill: 'var(--accent)' }}
+                  />
+                </AreaChart>
               </ResponsiveContainer>
             )}
           </div>
         </div>
 
-        {/* Financial: Paid vs Pending */}
+        {/* Financial Details: Paid vs Pending & Top Suppliers */}
         <div className="chart-card glass">
           <div className="chart-header">
             <div className="flex gap-2">
-              <ArrowUpCircle size={20} className="text-blue" />
-              <ArrowDownCircle size={20} className="text-red" />
+              <Activity size={20} className="text-blue" />
+              <h3>Fluxo Financeiro de Compras</h3>
             </div>
-            <h3>Contas Pagas vs Pendentes</h3>
           </div>
           <div className="chart-container">
             {loading ? (
               <div className="loading-placeholder">Carregando dados...</div>
             ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={financeData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip 
-                    contentStyle={{ background: 'rgba(255,255,255,0.9)', borderRadius: '8px', border: 'none' }}
-                  />
-                  <Legend />
-                  <Bar dataKey="pago" fill="#60a5fa" radius={[4, 4, 0, 0]} name="Pagas" />
-                  <Bar dataKey="pendente" fill="#f87171" radius={[4, 4, 0, 0]} name="Pendentes" />
-                </BarChart>
-              </ResponsiveContainer>
+              <>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={financeData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} hide />
+                    <Tooltip 
+                      contentStyle={{ background: 'rgba(255,255,255,0.95)', borderRadius: '12px', border: 'none' }}
+                    />
+                    <Legend iconType="circle" />
+                    <Bar dataKey="pago" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Pago" />
+                    <Bar dataKey="pendente" fill="#ef4444" radius={[4, 4, 0, 0]} name="Pendente" />
+                  </BarChart>
+                </ResponsiveContainer>
+
+                <div className="suppliers-summary mt-4">
+                  <h4 className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-3">
+                    <AlertCircle size={16} className="text-red" />
+                    Pendências por Fornecedor
+                  </h4>
+                  <div className="suppliers-list">
+                    {pendingBySupplier.length > 0 ? (
+                      pendingBySupplier.slice(0, 3).map((sup, idx) => (
+                        <div key={idx} className="supplier-item">
+                          <span className="sup-name">{sup.name}</span>
+                          <span className="sup-amount">R$ {sup.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted italic">Nenhuma pendência encontrada</p>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>
 
-        {/* Most Sold Products */}
+        {/* Unified Product Ranking */}
         <div className="chart-card glass">
           <div className="chart-header">
-            <PackageCheck size={20} className="text-yellow" />
-            <h3>Top 5 Itens Mais Vendidos</h3>
+            <div className="flex gap-2">
+              <Trophy size={20} className="text-yellow" />
+              <h3>Ranking de Produtos</h3>
+            </div>
           </div>
-          <div className="chart-container">
+          <div className="chart-container unified-ranking">
             {loading ? (
               <div className="loading-placeholder">Carregando dados...</div>
             ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={productRanking.mostSold} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.1)" />
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={12} width={100} />
-                  <Tooltip cursor={{fill: 'transparent'}} />
-                  <Bar dataKey="quantity" fill="#fbbf24" radius={[0, 4, 4, 0]} name="Qtd" />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-
-        {/* Least Sold Products */}
-        <div className="chart-card glass">
-          <div className="chart-header">
-            <Filter size={20} className="text-purple" />
-            <h3>Itens Menos Vendidos</h3>
-          </div>
-          <div className="chart-container">
-            {loading ? (
-              <div className="loading-placeholder">Carregando dados...</div>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={productRanking.leastSold}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="quantity"
-                    nameKey="name"
-                  >
-                    {productRanking.leastSold.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="ranking-split">
+                <div className="ranking-section">
+                  <h4 className="ranking-title most">Mais Vendidos</h4>
+                  {productRanking.mostSold.map((prod, idx) => (
+                    <div key={idx} className="rank-item">
+                      <div className="rank-info">
+                        <span className="rank-pos">#{idx + 1}</span>
+                        <span className="rank-name">{prod.name}</span>
+                      </div>
+                      <span className="rank-qty">{prod.quantity} un</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="ranking-divider" />
+                <div className="ranking-section">
+                  <h4 className="ranking-title least">Menos Vendidos</h4>
+                  {productRanking.leastSold.map((prod, idx) => (
+                    <div key={idx} className="rank-item">
+                      <div className="rank-info">
+                        <span className="rank-pos">#{idx + 1}</span>
+                        <span className="rank-name">{prod.name}</span>
+                      </div>
+                      <span className="rank-qty">{prod.quantity} un</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -387,11 +409,11 @@ const DashboardCharts: React.FC = () => {
         }
 
         .glass {
-          background: rgba(255, 255, 255, 0.7);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.3);
-          box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+          background: rgba(255, 255, 255, 0.8);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border: 1px solid rgba(255, 255, 255, 0.5);
+          box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
         }
 
         .filter-modes { display: flex; gap: 8px; background: #f1f5f9; padding: 4px; border-radius: 12px; }
@@ -448,16 +470,56 @@ const DashboardCharts: React.FC = () => {
           display: flex;
           flex-direction: column;
           gap: 20px;
+          transition: transform 0.3s ease;
         }
+        .chart-card:hover { transform: translateY(-4px); }
+        .chart-card.full-width { grid-column: 1 / -1; }
 
-        .chart-header { display: flex; align-items: center; gap: 12px; }
-        .chart-header h3 { font-size: 1.1rem; font-weight: 700; color: #1e293b; margin: 0; }
+        .chart-header { display: flex; flex-direction: column; gap: 4px; }
+        .chart-header h3 { font-size: 1.25rem; font-weight: 800; color: #1e293b; margin: 0; letter-spacing: -0.5px; }
 
-        .text-green { color: #4ade80; }
-        .text-blue { color: #60a5fa; }
-        .text-red { color: #f87171; }
-        .text-yellow { color: #fbbf24; }
-        .text-purple { color: #a78bfa; }
+        .suppliers-summary { 
+          background: #f8fafc; 
+          padding: 16px; 
+          border-radius: 12px; 
+          border: 1px solid #e2e8f0; 
+        }
+        .supplier-item {
+          display: flex;
+          justify-content: space-between;
+          padding: 6px 0;
+          border-bottom: 1px solid #f1f5f9;
+        }
+        .supplier-item:last-child { border: none; }
+        .sup-name { font-size: 0.85rem; font-weight: 600; color: #475569; }
+        .sup-amount { font-size: 0.85rem; font-weight: 700; color: #ef4444; }
+
+        .ranking-split { display: flex; gap: 24px; }
+        .ranking-section { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+        .ranking-title { font-size: 0.9rem; font-weight: 800; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 2px solid; }
+        .ranking-title.most { color: #f59e0b; border-color: #fef3c7; }
+        .ranking-title.least { color: #6366f1; border-color: #e0e7ff; }
+
+        .rank-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 8px 12px;
+          background: white;
+          border-radius: 8px;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .rank-info { display: flex; gap: 10px; align-items: center; }
+        .rank-pos { font-size: 0.75rem; font-weight: 800; color: #94a3b8; background: #f1f5f9; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+        .rank-name { font-size: 0.85rem; font-weight: 600; color: #334155; }
+        .rank-qty { font-size: 0.85rem; font-weight: 700; color: var(--accent); }
+
+        .ranking-divider { width: 1px; background: #e2e8f0; }
+
+        .text-accent { color: var(--accent); }
+        .text-red { color: #ef4444; }
+        .text-blue { color: #3b82f6; }
+        .text-yellow { color: #f59e0b; }
 
         .loading-placeholder {
           height: 300px;
@@ -480,6 +542,8 @@ const DashboardCharts: React.FC = () => {
 
         @media (max-width: 1024px) {
           .charts-grid { grid-template-columns: 1fr; }
+          .ranking-split { flex-direction: column; }
+          .ranking-divider { height: 1px; width: 100%; }
         }
 
         @media (max-width: 768px) {

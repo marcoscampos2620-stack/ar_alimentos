@@ -1,23 +1,35 @@
-import React from 'react';
-import { LogOut, User, Bell } from 'lucide-react';
+import { LogOut, User, Settings } from 'lucide-react';
 
 interface TopBarProps {
   profile: any;
   signOut: () => void;
+  user?: any;
+  isAdmin?: boolean;
+  activeTab?: string;
+  setActiveTab?: (tab: string) => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ profile, signOut }) => {
+export default function TopBar({ profile, signOut, isAdmin, activeTab, setActiveTab }: TopBarProps) {
+  // Configurações não são mais necessárias aqui após a remoção da logo/título
+
   return (
     <header className="topbar">
       <div className="topbar-left">
-        <h2 className="page-title">Sistema de Gestão</h2>
+        {/* Espaço reservado para ações futuras ou vazio para manter o alinhamento central/direito */}
       </div>
 
       <div className="topbar-right">
-        <button className="icon-btn" title="Notificações">
-          <Bell size={20} />
-          <span className="notification-dot" />
-        </button>
+        {isAdmin && setActiveTab && (
+          <button 
+            className={`icon-btn mobile-settings-btn ${activeTab === 'settings' ? 'active' : ''}`} 
+            title="Configurações do Sistema"
+            onClick={() => setActiveTab('settings')}
+          >
+            <Settings size={20} />
+          </button>
+        )}
+
+
 
         <div className="vertical-divider" />
 
@@ -69,16 +81,7 @@ const TopBar: React.FC<TopBarProps> = ({ profile, signOut }) => {
           padding: 8px;
         }
 
-        .notification-dot {
-          position: absolute;
-          top: 8px;
-          right: 8px;
-          width: 8px;
-          height: 8px;
-          background: var(--error);
-          border-radius: 50%;
-          border: 2px solid white;
-        }
+
 
         .vertical-divider {
           width: 1px;
@@ -137,6 +140,14 @@ const TopBar: React.FC<TopBarProps> = ({ profile, signOut }) => {
           border-color: #feb2b2;
         }
         
+        .mobile-settings-btn {
+          display: none;
+        }
+
+        .mobile-settings-btn.active {
+          color: var(--primary);
+        }
+        
         @media (max-width: 768px) {
           .topbar { 
             padding: 0 16px; 
@@ -147,10 +158,9 @@ const TopBar: React.FC<TopBarProps> = ({ profile, signOut }) => {
           .logout-btn { padding: 6px 10px; }
           .logout-btn span { display: none; }
           .user-avatar { width: 32px; height: 32px; }
+          .mobile-settings-btn { display: flex; }
         }
       `}</style>
     </header>
   );
-};
-
-export default TopBar;
+}

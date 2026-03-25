@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 
 interface MainLayoutProps {
-  children: React.ReactNode;
+  children: ReactNode;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   user: any;
@@ -13,7 +13,7 @@ interface MainLayoutProps {
   hasAccess: (tab: string) => boolean;
 }
 
-const MainLayout: React.FC<MainLayoutProps> = ({ 
+export default function MainLayout({ 
   children, 
   activeTab, 
   setActiveTab, 
@@ -22,7 +22,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   signOut,
   isAdmin,
   hasAccess
-}) => {
+}: MainLayoutProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
@@ -37,7 +37,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       />
       
       <div className="content-wrapper">
-        <TopBar user={user} profile={profile} signOut={signOut} />
+        <TopBar 
+          user={user} 
+          profile={profile} 
+          signOut={signOut} 
+          isAdmin={isAdmin}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
         <main className="main-viewport">
           {children}
         </main>
@@ -69,6 +76,4 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       `}</style>
     </div>
   );
-};
-
-export default MainLayout;
+}
