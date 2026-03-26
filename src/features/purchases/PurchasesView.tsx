@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { formatCurrency } from '../../utils/formatCurrency';
 import { supabase } from '../../config/supabase';
 import { 
   Plus, 
@@ -220,7 +221,7 @@ const PurchasesView: React.FC = () => {
         </div>
         <div className="kpi-info">
           <span className="kpi-label">Compras ({periodLabels[period]})</span>
-          <span className="kpi-value">R$ {totalPeriod.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span className="kpi-value">{formatCurrency(totalPeriod)}</span>
         </div>
         <div className="kpi-trend">
           <Filter size={20} />
@@ -286,7 +287,7 @@ const PurchasesView: React.FC = () => {
                   <ChevronRight size={20} className={expandedYears[Number(year)] ? 'rotate-90' : ''} />
                   <span>{year}</span>
                 </div>
-                <div className="header-total">R$ {yearData.total.toFixed(2)}</div>
+                <div className="header-total">{formatCurrency(yearData.total)}</div>
               </div>
 
               {expandedYears[Number(year)] && (
@@ -302,7 +303,7 @@ const PurchasesView: React.FC = () => {
                           <ChevronRight size={18} className={expandedMonths[monthKey] ? 'rotate-90' : ''} />
                           <span className="capitalize">{monthData.name}</span>
                         </div>
-                        <div className="header-total">R$ {monthData.total.toFixed(2)}</div>
+                        <div className="header-total">{formatCurrency(monthData.total)}</div>
                       </div>
 
                       {expandedMonths[monthKey] && (
@@ -314,7 +315,7 @@ const PurchasesView: React.FC = () => {
                                   <ChevronRight size={16} className={expandedDays[dayKey] ? 'rotate-90' : ''} />
                                   <span>Dia {dayData.day}</span>
                                 </div>
-                                <div className="header-total">R$ {dayData.total.toFixed(2)}</div>
+                                <div className="header-total">{formatCurrency(dayData.total)}</div>
                               </div>
 
                               {expandedDays[dayKey] && (
@@ -329,7 +330,7 @@ const PurchasesView: React.FC = () => {
                                         <div className={`status-badge ${purchase.status.toLowerCase()}`}>
                                           {purchase.status === 'PAID' ? 'Pago' : 'Pendente'}
                                         </div>
-                                        <div className="sale-total-compact">R$ {Number(purchase.total_amount).toFixed(2)}</div>
+                                        <div className="sale-total-compact">{formatCurrency(purchase.total_amount)}</div>
                                       </div>
 
                                       {expandedId === purchase.id && (

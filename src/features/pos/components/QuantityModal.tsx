@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatCurrency } from '../../../utils/formatCurrency';
 import { Minus, Plus, X, ShoppingCart } from 'lucide-react';
 
 interface Product {
@@ -63,7 +64,7 @@ const QuantityModal: React.FC<QuantityModalProps> = ({ product, onAdd, onClose }
         <div className="card-body">
           <div className="price-display">
             <span className="label">Preço Unitário</span>
-            <span className="value">R$ {product.price.toFixed(2)} / {product.unit_type}</span>
+            <span className="value">{formatCurrency(product.price)} / {product.unit_type}</span>
           </div>
 
           <div className="qty-selector">
@@ -94,7 +95,7 @@ const QuantityModal: React.FC<QuantityModalProps> = ({ product, onAdd, onClose }
 
           <div className="subtotal-row">
             <span className="label">Subtotal</span>
-            <span className="value">R$ {subtotal.toFixed(2)}</span>
+            <span className="value">{formatCurrency(subtotal)}</span>
           </div>
 
           <button 

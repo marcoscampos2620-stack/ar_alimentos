@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatCurrency } from '../../../utils/formatCurrency';
 
 interface Product {
   id: string;
@@ -32,7 +33,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) => {
       </div>
       <div className="info">
         <span className="name">{product.name}</span>
-        <span className="price">R$ {product.price.toFixed(2)} / <small>{product.unit_type}</small></span>
+        <span className="price">{formatCurrency(product.price)} / <small>{product.unit_type}</small></span>
       </div>
 
       <style>{`

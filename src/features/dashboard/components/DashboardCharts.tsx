@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatCurrency } from '../../../utils/formatCurrency';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
   AreaChart, Area
@@ -285,7 +286,7 @@ const DashboardCharts: React.FC = () => {
                     fontSize={12} 
                     tickLine={false} 
                     axisLine={false} 
-                    tickFormatter={(value) => `R$ ${value}`}
+                    tickFormatter={(value) => formatCurrency(value)}
                   />
                   <Tooltip 
                     contentStyle={{ 
@@ -294,7 +295,7 @@ const DashboardCharts: React.FC = () => {
                       border: '1px solid #e2e8f0',
                       boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
                     }}
-                    formatter={(value: any) => [`R$ ${Number(value).toFixed(2)}`, 'Vendas']}
+                    formatter={(value: any) => [formatCurrency(value), 'Vendas']}
                   />
                   <Area 
                     type="monotone" 
@@ -351,7 +352,7 @@ const DashboardCharts: React.FC = () => {
                       border: '1px solid #e2e8f0',
                       boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' 
                     }}
-                    formatter={(value: any) => [`R$ ${Number(value).toFixed(2)}`, 'Dívida Total']}
+                    formatter={(value: any) => [formatCurrency(value), 'Dívida Total']}
                   />
                   <Bar 
                     dataKey="total_debt" 
@@ -360,7 +361,7 @@ const DashboardCharts: React.FC = () => {
                     barSize={20}
                     label={{ 
                       position: 'right', 
-                      formatter: (val: any) => `R$ ${Number(val).toFixed(2)}`,
+                      formatter: (val: any) => formatCurrency(val),
                       fontSize: 11,
                       fontWeight: 700,
                       fill: '#ef4444'
@@ -414,7 +415,7 @@ const DashboardCharts: React.FC = () => {
                       pendingBySupplier.slice(0, 3).map((sup, idx) => (
                         <div key={idx} className="supplier-item">
                           <span className="sup-name">{sup.name}</span>
-                          <span className="sup-amount">R$ {sup.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          <span className="sup-amount">{formatCurrency(sup.amount)}</span>
                         </div>
                       ))
                     ) : (

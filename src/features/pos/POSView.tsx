@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatCurrency } from '../../utils/formatCurrency';
 import { supabase } from '../../config/supabase';
 import { Search, ShoppingCart, Trash2, X } from 'lucide-react';
 
@@ -330,11 +331,11 @@ const POSView: React.FC = () => {
                   <div className="row-info">
                     <span className="name">{item.product.name}</span>
                     <span className="details">
-                      {item.quantity.toFixed(item.product.unit_type === 'KG' ? 3 : 0)} {item.product.unit_type} x R$ {item.product.price.toFixed(2)}
+                      {item.quantity.toFixed(item.product.unit_type === 'KG' ? 3 : 0)} {item.product.unit_type} x {formatCurrency(item.product.price)}
                     </span>
                   </div>
                   <div className="row-actions">
-                    <span className="subtotal">R$ {item.subtotal.toFixed(2)}</span>
+                    <span className="subtotal">{formatCurrency(item.subtotal)}</span>
                     <button className="btn-remove" onClick={() => removeFromCart(item.product.id)}>
                       <Trash2 size={16} />
                     </button>
@@ -347,7 +348,7 @@ const POSView: React.FC = () => {
             <div className="drawer-footer">
               <div className="total-bar">
                 <span>Total</span>
-                <span className="value">R$ {total.toFixed(2)}</span>
+                <span className="value">{formatCurrency(total)}</span>
               </div>
               <button 
                 className="btn-primary btn-block btn-xl"
@@ -400,7 +401,7 @@ const POSView: React.FC = () => {
             <div className="success-details">
               <div className="detail-row">
                 <span>Total</span>
-                <span className="val">R$ {saleSuccess.total.toFixed(2)}</span>
+                <span className="val">{formatCurrency(saleSuccess.total)}</span>
               </div>
               <div className="detail-row">
                 <span>Pagamento</span>

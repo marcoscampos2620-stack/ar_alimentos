@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatCurrency } from '../../utils/formatCurrency';
 import { supabase } from '../../config/supabase';
 import { 
   Plus, 
@@ -238,7 +239,7 @@ const InventoryView: React.FC = () => {
                       </div>
                       
                       <div className="product-price-v2">
-                        R$ {product.price.toFixed(2)}
+                        {formatCurrency(product.price)}
                       </div>
 
                       {product.categories?.name && (

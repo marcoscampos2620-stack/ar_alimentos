@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { formatCurrency } from '../../utils/formatCurrency';
 import { supabase } from '../../config/supabase';
 import { 
   Search, 
@@ -319,7 +320,7 @@ const SalesView: React.FC = () => {
         </div>
         <div className="kpi-info">
           <span className="kpi-label">Vendas ({periodLabels[period]})</span>
-          <span className="kpi-value">R$ {totalPeriod.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span className="kpi-value">{formatCurrency(totalPeriod)}</span>
         </div>
         <div className="kpi-trend">
           <Filter size={20} />
@@ -331,7 +332,7 @@ const SalesView: React.FC = () => {
         <div className="kpi-mini-card pending">
           <div className="kpi-mini-info">
             <span className="kpi-mini-label">Fiado Pendente</span>
-            <span className="kpi-mini-value">R$ {debtKPI.totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <span className="kpi-mini-value">{formatCurrency(debtKPI.totalPending)}</span>
           </div>
           <span className="kpi-mini-count">{debtKPI.countPending} abertos</span>
         </div>
@@ -339,7 +340,7 @@ const SalesView: React.FC = () => {
         <div className="kpi-mini-card overdue">
           <div className="kpi-mini-info">
             <span className="kpi-mini-label">Fiados Vencidos</span>
-            <span className="kpi-mini-value">R$ {debtKPI.totalOverdue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <span className="kpi-mini-value">{formatCurrency(debtKPI.totalOverdue)}</span>
           </div>
           <span className="kpi-mini-count alert">
             <AlertTriangle size={10} />
@@ -406,7 +407,7 @@ const SalesView: React.FC = () => {
                   <ChevronRight size={20} className={expandedYears[Number(year)] ? 'rotate-90' : ''} />
                   <span>{year}</span>
                 </div>
-                <div className="header-total">R$ {yearData.total.toFixed(2)}</div>
+                <div className="header-total">{formatCurrency(yearData.total)}</div>
               </div>
 
               {expandedYears[Number(year)] && (
@@ -422,7 +423,7 @@ const SalesView: React.FC = () => {
                           <ChevronRight size={18} className={expandedMonths[monthKey] ? 'rotate-90' : ''} />
                           <span className="capitalize">{monthData.name}</span>
                         </div>
-                        <div className="header-total">R$ {monthData.total.toFixed(2)}</div>
+                        <div className="header-total">{formatCurrency(monthData.total)}</div>
                       </div>
 
                       {expandedMonths[monthKey] && (
@@ -434,7 +435,7 @@ const SalesView: React.FC = () => {
                                   <ChevronRight size={16} className={expandedDays[dayKey] ? 'rotate-90' : ''} />
                                   <span>Dia {dayData.day}</span>
                                 </div>
-                                <div className="header-total">R$ {dayData.total.toFixed(2)}</div>
+                                <div className="header-total">{formatCurrency(dayData.total)}</div>
                               </div>
 
                               {expandedDays[dayKey] && (
@@ -448,7 +449,7 @@ const SalesView: React.FC = () => {
                                           <span className="sale-customer-compact">{sale.customers?.name || 'Cliente Casual'}</span>
                                         </div>
                                         <div className="sale-payment-compact">{sale.payment_method}</div>
-                                        <div className="sale-total-compact">R$ {Number(sale.total_amount).toFixed(2)}</div>
+                                        <div className="sale-total-compact">{formatCurrency(sale.total_amount)}</div>
                                       </div>
 
                                       {expandedSaleId === sale.id && (
@@ -458,8 +459,8 @@ const SalesView: React.FC = () => {
                                               <div key={item.id} className="item-row-premium">
                                                 <div className="item-name">{item.products?.name}</div>
                                                 <div className="item-qty">{Number(item.quantity).toFixed(item.products?.unit_type === 'KG' ? 3 : 0)} {item.products?.unit_type}</div>
-                                                <div className="item-price">R$ {Number(item.unit_price).toFixed(2)}</div>
-                                                <div className="item-subtotal">R$ {Number(item.subtotal).toFixed(2)}</div>
+                                                <div className="item-price">{formatCurrency(item.unit_price)}</div>
+                                                <div className="item-subtotal">{formatCurrency(item.subtotal)}</div>
                                               </div>
                                             ))}
                                           </div>

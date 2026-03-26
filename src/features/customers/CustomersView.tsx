@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { formatCurrency } from '../../utils/formatCurrency';
 import { supabase } from '../../config/supabase';
 import { Plus, Search, Phone, ArrowLeft, ChevronRight, CheckCircle, AlertTriangle, Calendar, DollarSign } from 'lucide-react';
 import CustomerForm from './CustomerForm';
+import DebtDetailView from './DebtDetailView';
 
 interface CustomerDebt {
   id: string;
@@ -33,7 +35,7 @@ const CustomersView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [expandedCustomerId, setExpandedCustomerId] = useState<string | null>(null);
-  const [payingDebtId, setPayingDebtId] = useState<string | null>(null);
+  const [selectedDebt, setSelectedDebt] = useState<{ debt: CustomerDebt; customerId: string; customerName: string } | null>(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -73,42 +75,7 @@ const CustomersView: React.FC = () => {
     setLoading(false);
   };
 
-  const handleConfirmPayment = async (debt: CustomerDebt, customerId: string) => {
-    setPayingDebtId(debt.id);
-    try {
-      // Marcar dívida como paga
-      await supabase
-        .from('customer_debts')
-        .update({ status: 'PAID', paid_at: new Date().toISOString() })
-        .eq('id', debt.id);
 
-      // Registrar o pagamento em debt_payments
-      await supabase.from('debt_payments').insert([{
-        customer_id: customerId,
-        amount_paid: debt.amount,
-        debt_id: debt.id
-      }]);
-
-      // Atualizar total_debt do cliente
-      const { data: customer } = await supabase
-        .from('customers')
-        .select('total_debt')
-        .eq('id', customerId)
-        .single();
-
-      const newDebt = Math.max(0, (customer?.total_debt || 0) - debt.amount);
-      await supabase
-        .from('customers')
-        .update({ total_debt: newDebt })
-        .eq('id', customerId);
-
-      fetchCustomers();
-    } catch (error: any) {
-      alert('Erro ao confirmar pagamento: ' + error.message);
-    } finally {
-      setPayingDebtId(null);
-    }
-  };
 
   const isOverdue = (dueDate: string) => {
     return new Date(dueDate + 'T23:59:59') < new Date();
@@ -131,6 +98,18 @@ const CustomersView: React.FC = () => {
   const toggleExpand = (customerId: string) => {
     setExpandedCustomerId(expandedCustomerId === customerId ? null : customerId);
   };
+
+  if (selectedDebt) {
+    return (
+      <DebtDetailView
+        debt={selectedDebt.debt}
+        customerId={selectedDebt.customerId}
+        customerName={selectedDebt.customerName}
+        onBack={() => setSelectedDebt(null)}
+        onUpdated={fetchCustomers}
+      />
+    );
+  }
 
   if (showForm) {
     return (
@@ -206,18 +185,18 @@ const CustomersView: React.FC = () => {
                     <div className="customer-stats">
                       <span className="stat-pill normal">
                         <DollarSign size={12} />
-                        Normal: R$ {summary.total_normal.toFixed(2)}
+                        Normal: {formatCurrency(summary.total_normal)}
                       </span>
                       <span className="stat-pill fiado">
                         <Calendar size={12} />
-                        Fiado: R$ {summary.total_fiado.toFixed(2)}
+                        Fiado: {formatCurrency(summary.total_fiado)}
                       </span>
                     </div>
                   </div>
                   <div className="customer-debt-section">
                     <span className="label">Dívida Pendente</span>
                     <span className={`value ${customer.total_debt > 0 ? 'debt' : 'clean'}`}>
-                      R$ {customer.total_debt.toFixed(2)}
+                      {formatCurrency(customer.total_debt)}
                     </span>
                     {pending.length > 0 && (
                       <span className="debt-count">{pending.length} fiado{pending.length > 1 ? 's' : ''}</span>
@@ -248,7 +227,7 @@ const CustomersView: React.FC = () => {
                         return (
                           <div key={debt.id} className={`debt-row ${debt.status === 'PAID' ? 'paid' : ''} ${overdueDebt ? 'overdue-row' : ''}`}>
                             <div className="debt-info">
-                              <div className="debt-amount">R$ {Number(debt.amount).toFixed(2)}</div>
+                              <div className="debt-amount">{formatCurrency(debt.amount)}</div>
                               <div className="debt-meta">
                                 <span className={`due-date ${overdueDebt ? 'overdue-text' : ''}`}>
                                   {overdueDebt && <AlertTriangle size={12} />}
@@ -262,23 +241,21 @@ const CustomersView: React.FC = () => {
                               </div>
                             </div>
                             <div className="debt-actions">
-                              {debt.status === 'PAID' ? (
+                              {debt.status === 'PAID' && (
                                 <span className="paid-badge">
                                   <CheckCircle size={14} />
                                   Quitado
                                 </span>
-                              ) : (
-                                <button
-                                  className="btn-confirm-pay"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleConfirmPayment(debt, customer.id);
-                                  }}
-                                  disabled={payingDebtId === debt.id}
-                                >
-                                  {payingDebtId === debt.id ? 'Processando...' : 'Confirmar Pagamento'}
-                                </button>
                               )}
+                              <button
+                                className="btn-ver-nota"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedDebt({ debt, customerId: customer.id, customerName: customer.name });
+                                }}
+                              >
+                                Ver Nota
+                              </button>
                             </div>
                           </div>
                         );
@@ -429,17 +406,35 @@ const CustomersView: React.FC = () => {
         .due-date.overdue-text { color: #ef4444; }
         .paid-date { font-size: 0.75rem; font-weight: 600; color: #22c55e; }
 
-        .debt-actions { display: flex; align-items: center; }
+        .debt-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .paid-badge {
           display: flex;
           align-items: center;
           gap: 6px;
-          font-size: 0.8rem;
+          font-size: 0.75rem;
           font-weight: 700;
           color: #22c55e;
           background: #dcfce7;
-          padding: 6px 14px;
+          padding: 4px 10px;
           border-radius: 10px;
+        }
+
+        .btn-ver-nota {
+          background: var(--primary);
+          color: white;
+          padding: 6px 16px;
+          border-radius: 10px;
+          font-size: 0.8rem;
+          font-weight: 700;
+          transition: all 0.2s;
+          white-space: nowrap;
+          border: none;
+          cursor: pointer;
+        }
+        .btn-ver-nota:hover {
+          background: #1565c0;
+          transform: scale(1.03);
+          box-shadow: 0 4px 12px rgba(30, 136, 229, 0.3);
         }
 
         .btn-confirm-pay {

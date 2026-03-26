@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatCurrency } from '../../../utils/formatCurrency';
 import { ShoppingCart, ChevronUp } from 'lucide-react';
 
 interface FloatingCartProps {
@@ -18,7 +19,7 @@ const FloatingCart: React.FC<FloatingCartProps> = ({ itemCount, total, onClick }
           <ShoppingCart size={24} />
           <div className="cart-info">
             <span className="label">Ver Carrinho</span>
-            <span className="total">R$ {total.toFixed(2)}</span>
+            <span className="total">{formatCurrency(total)}</span>
           </div>
         </div>
         <ChevronUp size={20} />

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatCurrency } from '../../../utils/formatCurrency';
 import { X, CreditCard, Banknote, QrCode, User, Check } from 'lucide-react';
 import { supabase } from '../../../config/supabase';
 
@@ -84,7 +85,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         <div className="payment-content">
           <div className="total-display glass">
             <span className="label">Total a Pagar</span>
-            <span className="value">R$ {total.toFixed(2)}</span>
+            <span className="value">{formatCurrency(total)}</span>
           </div>
 
           <div className="invoice-selection fade-in">
@@ -175,7 +176,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               
               <div className="change-display">
                 <span className="label">Troco</span>
-                <span className="value">R$ {change.toFixed(2)}</span>
+                <span className="value">{formatCurrency(change)}</span>
               </div>
             </div>
           )}
