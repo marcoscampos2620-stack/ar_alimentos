@@ -32,8 +32,10 @@ interface Sale {
   customer_id?: string;
   created_at: string;
   customers?: { name: string };
+  sale_categories?: { name: string };
   items?: any[];
   invoice_number?: number;
+  category_id?: string | null;
 }
 
 interface DebtKPI {
@@ -41,6 +43,12 @@ interface DebtKPI {
   countPending: number;
   totalOverdue: number;
   countOverdue: number;
+}
+
+interface SaleCategory {
+  id: string;
+  name: string;
+  created_at: string;
 }
 
 type Period = 'monthly' | 'yearly' | 'all' | 'custom';
@@ -60,6 +68,21 @@ const SalesView: React.FC = () => {
   const [customers, setCustomers] = useState<any[]>([]);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [activeTab, setActiveTab] = useState<'sales' | 'categories'>('sales');
+  
+  // Categorias
+  const [saleCategories, setSaleCategories] = useState<SaleCategory[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<SaleCategory | null>(null);
+  const [categoryName, setCategoryName] = useState('');
+  
+  // Associação em Massa
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkType, setBulkType] = useState<'sales' | 'customers'>('sales');
+  const [selectedBulkCategory, setSelectedBulkCategory] = useState('');
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
   
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'ADMIN';
@@ -68,6 +91,7 @@ const SalesView: React.FC = () => {
     fetchSales();
     fetchDebtKPI();
     fetchCustomers();
+    fetchSaleCategories();
 
     const channel = supabase
       .channel('sales-history-realtime')
@@ -123,7 +147,8 @@ const SalesView: React.FC = () => {
         .from('sales')
         .select(`
           *,
-          customers(name)
+          customers(name),
+          sale_categories(name)
         `)
         .order('created_at', { ascending: false });
 
@@ -140,6 +165,19 @@ const SalesView: React.FC = () => {
     const { data } = await supabase.from('customers').select('id, name').order('name');
     if (data) setCustomers(data);
   };
+
+  const fetchSaleCategories = async () => {
+    setLoadingCategories(true);
+    const { data } = await supabase.from('sale_categories').select('*').order('name');
+    if (data) setSaleCategories(data);
+    setLoadingCategories(false);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'categories') {
+      fetchSaleCategories();
+    }
+  }, [activeTab]);
 
   const fetchSaleItems = async (saleId: string) => {
     try {
@@ -254,6 +292,63 @@ const SalesView: React.FC = () => {
     }
   };
 
+  const handleSaveCategory = async () => {
+    if (!categoryName.trim()) return;
+    try {
+      if (editingCategory) {
+        await supabase.from('sale_categories').update({ name: categoryName }).eq('id', editingCategory.id);
+      } else {
+        await supabase.from('sale_categories').insert([{ name: categoryName }]);
+      }
+      setCategoryName('');
+      setEditingCategory(null);
+      setShowCategoryModal(false);
+      fetchSaleCategories();
+    } catch (error: any) {
+      alert('Erro ao salvar categoria: ' + error.message);
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    if (!confirm('Excluir esta categoria?')) return;
+    try {
+      const { error } = await supabase.from('sale_categories').delete().eq('id', id);
+      if (error) throw error;
+      fetchSaleCategories();
+    } catch (error: any) {
+      alert('Erro ao excluir categoria. Verifique se existem vendas vinculadas.');
+    }
+  };
+
+  const handleBulkSave = async () => {
+    if (!selectedBulkCategory || selectedItems.length === 0) return;
+    setIsBulkSaving(true);
+    try {
+      if (bulkType === 'sales') {
+        const { error } = await supabase
+          .from('sales')
+          .update({ category_id: selectedBulkCategory })
+          .in('id', selectedItems);
+        if (error) throw error;
+      } else {
+        // Associar por cliente: buscar todas as vendas desses clientes e atualizar
+        const { error } = await supabase
+          .from('sales')
+          .update({ category_id: selectedBulkCategory })
+          .in('customer_id', selectedItems);
+        if (error) throw error;
+      }
+      
+      setShowBulkModal(false);
+      setSelectedItems([]);
+      fetchSales();
+    } catch (error: any) {
+      alert('Erro na associação em massa: ' + error.message);
+    } finally {
+      setIsBulkSaving(false);
+    }
+  };
+
   const handleDeleteSale = async (sale: Sale) => {
     try {
       await supabase.from('sale_items').delete().eq('sale_id', sale.id);
@@ -280,7 +375,8 @@ const SalesView: React.FC = () => {
           payment_method: updatedData.payment_method,
           customer_id: updatedData.customer_id,
           invoice_number: updatedData.invoice_number,
-          total_amount: updatedData.total_amount
+          total_amount: updatedData.total_amount,
+          category_id: updatedData.category_id
         })
         .eq('id', editingSale.id);
 
@@ -309,12 +405,24 @@ const SalesView: React.FC = () => {
 
   return (
     <div className="sales-view fade-in">
-      <div className="section-header">
-        <h1>Histórico de Vendas</h1>
-        <p>Acompanhe e gerencie todas as transações realizadas no PDV</p>
+      <div className="view-tabs">
+        <button 
+          className={`tab-btn ${activeTab === 'sales' ? 'active' : ''}`}
+          onClick={() => setActiveTab('sales')}
+        >
+          Histórico de Vendas
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'categories' ? 'active' : ''}`}
+          onClick={() => setActiveTab('categories')}
+        >
+          Categorias de Notas
+        </button>
       </div>
 
-      <div className="kpi-banner shadow-premium">
+      {activeTab === 'sales' ? (
+        <>
+          <div className="kpi-banner shadow-premium">
         <div className="kpi-icon">
           <DollarSign size={32} />
         </div>
@@ -447,6 +555,9 @@ const SalesView: React.FC = () => {
                                           <span className="sale-time">{format(parseISO(sale.created_at), 'HH:mm')}</span>
                                           <span className="sale-invoice">Nº {sale.invoice_number || '---'}</span>
                                           <span className="sale-customer-compact">{sale.customers?.name || 'Cliente Casual'}</span>
+                                          {sale.sale_categories && (
+                                            <span className="sale-category-badge">{sale.sale_categories.name}</span>
+                                          )}
                                         </div>
                                         <div className="sale-payment-compact">{sale.payment_method}</div>
                                         <div className="sale-total-compact">{formatCurrency(sale.total_amount)}</div>
@@ -542,6 +653,18 @@ const SalesView: React.FC = () => {
                 </select>
               </div>
               <div className="input-group">
+                <label>Categoria</label>
+                <select 
+                  value={editingSale.category_id || ''} 
+                  onChange={(e) => setEditingSale({ ...editingSale, category_id: e.target.value || null })}
+                >
+                  <option value="">Sem Categoria</option>
+                  {saleCategories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="input-group">
                 <label>Total (R$)</label>
                 <input 
                   type="number" 
@@ -563,8 +686,199 @@ const SalesView: React.FC = () => {
           </div>
         </div>
       )}
+        </>
+      ) : (
+        <div className="categories-tab-content fade-in">
+          <div className="section-header-mini">
+            <h2>Gerenciar Categorias</h2>
+            <div className="header-actions">
+              <button className="btn-primary" onClick={() => setShowBulkModal(true)}>
+                <Filter size={18} /> Associação em Massa
+              </button>
+              <button className="btn-secondary" onClick={() => {
+                setEditingCategory(null);
+                setCategoryName('');
+                setShowCategoryModal(true);
+              }}>
+                Nova Categoria
+              </button>
+            </div>
+          </div>
+
+          <div className="categories-grid">
+            {loadingCategories ? (
+              <p>Carregando categorias...</p>
+            ) : saleCategories.length === 0 ? (
+              <p className="empty-state">Nenhuma categoria cadastrada.</p>
+            ) : (
+              saleCategories.map(cat => (
+                <div key={cat.id} className="category-card shadow-sm">
+                  <span className="category-name">{cat.name}</span>
+                  <div className="category-actions">
+                    <button className="btn-icon" onClick={() => {
+                      setEditingCategory(cat);
+                      setCategoryName(cat.name);
+                      setShowCategoryModal(true);
+                    }}>
+                      <Edit size={16} />
+                    </button>
+                    <button className="btn-icon delete" onClick={() => handleDeleteCategory(cat.id)}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Categoria */}
+      {showCategoryModal && (
+        <div className="modal-overlay fade-in">
+          <div className="modal-card shadow-xl">
+            <div className="modal-header">
+              <h3>{editingCategory ? 'Editar Categoria' : 'Nova Categoria'}</h3>
+              <button onClick={() => setShowCategoryModal(false)} className="btn-close">×</button>
+            </div>
+            <div className="modal-content">
+              <div className="input-group">
+                <label>Nome da Categoria</label>
+                <input 
+                  type="text" 
+                  value={categoryName} 
+                  onChange={(e) => setCategoryName(e.target.value)}
+                  placeholder="Ex: Rota Sul, Pronta Entrega..."
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-primary" onClick={handleSaveCategory}>Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Associação em Massa */}
+      {showBulkModal && (
+        <div className="modal-overlay fade-in">
+          <div className="modal-card wide shadow-xl">
+            <div className="modal-header">
+              <h3>Associação em Massa</h3>
+              <button onClick={() => setShowBulkModal(false)} className="btn-close">×</button>
+            </div>
+            <div className="modal-content">
+              <div className="bulk-selectors">
+                <div className="input-group">
+                  <label>Tipo de Associação</label>
+                  <select value={bulkType} onChange={(e) => {
+                    setBulkType(e.target.value as any);
+                    setSelectedItems([]);
+                  }}>
+                    <option value="sales">Vendas Individuais</option>
+                    <option value="customers">Todos os pedidos por Cliente</option>
+                  </select>
+                </div>
+                <div className="input-group">
+                  <label>Categoria Destino</label>
+                  <select value={selectedBulkCategory} onChange={(e) => setSelectedBulkCategory(e.target.value)}>
+                    <option value="">Selecione...</option>
+                    {saleCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="bulk-list">
+                <label>{bulkType === 'sales' ? 'Selecione as Vendas' : 'Selecione os Clientes'}</label>
+                <div className="items-selector-grid">
+                  {bulkType === 'sales' ? (
+                    sales.slice(0, 50).map(s => (
+                      <label key={s.id} className={`selector-item ${selectedItems.includes(s.id) ? 'selected' : ''}`}>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedItems.includes(s.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedItems([...selectedItems, s.id]);
+                            else setSelectedItems(selectedItems.filter(id => id !== s.id));
+                          }}
+                        />
+                        <div className="item-info">
+                          <span className="main">{s.customers?.name || 'Casual'}</span>
+                          <span className="sub">Nº {s.invoice_number} - {formatCurrency(s.total_amount)}</span>
+                        </div>
+                      </label>
+                    ))
+                  ) : (
+                    customers.map(c => (
+                      <label key={c.id} className={`selector-item ${selectedItems.includes(c.id) ? 'selected' : ''}`}>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedItems.includes(c.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedItems([...selectedItems, c.id]);
+                            else setSelectedItems(selectedItems.filter(id => id !== c.id));
+                          }}
+                        />
+                        <div className="item-info">
+                          <span className="main">{c.name}</span>
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn-primary" 
+                disabled={!selectedBulkCategory || selectedItems.length === 0 || isBulkSaving}
+                onClick={handleBulkSave}
+              >
+                {isBulkSaving ? 'Processando...' : `Associar ${selectedItems.length} itens`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
+        .view-tabs { display: flex; gap: 10px; margin-bottom: 24px; border-bottom: 2px solid var(--border); padding-bottom: 2px; }
+        .tab-btn { padding: 10px 20px; font-weight: 800; color: var(--text-muted); background: none; border: none; cursor: pointer; transition: 0.2s; position: relative; }
+        .tab-btn.active { color: var(--primary); }
+        .tab-btn.active::after { content: ''; position: absolute; bottom: -2px; left: 0; right: 0; height: 3px; background: var(--primary); border-radius: 3px; }
+
+        .section-header-mini { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .header-actions { display: flex; gap: 12px; }
+        
+        .categories-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+        .category-card { background: white; padding: 16px; border-radius: 12px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .category-name { font-weight: 700; color: var(--text-main); }
+        .category-actions { display: flex; gap: 4px; }
+        .btn-icon.delete:hover { color: var(--error); }
+
+        .modal-card { background: white; border-radius: 20px; width: 90%; max-width: 400px; overflow: hidden; }
+        .modal-card.wide { max-width: 700px; }
+        .btn-close { font-size: 1.5rem; background: none; border: none; cursor: pointer; color: var(--text-muted); }
+        
+        .bulk-selectors { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+        .bulk-list label { font-size: 0.8rem; font-weight: 800; color: var(--text-muted); margin-bottom: 10px; display: block; }
+        .items-selector-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; max-height: 300px; overflow-y: auto; padding: 10px; background: #f8fafc; border-radius: 12px; border: 1px solid var(--border); }
+        .selector-item { display: flex; align-items: center; gap: 10px; padding: 10px; background: white; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        .selector-item:hover { border-color: var(--primary); }
+        .selector-item.selected { border-color: var(--primary); background: #eff6ff; }
+        .selector-item input { width: 18px; height: 18px; }
+        .item-info { display: flex; flex-direction: column; }
+        .item-info .main { font-weight: 700; font-size: 0.85rem; }
+        .item-info .sub { font-size: 0.7rem; color: var(--text-muted); }
+
+        .sale-category-badge { font-size: 0.65rem; font-weight: 800; color: white; background: var(--primary); padding: 2px 8px; border-radius: 20px; text-transform: uppercase; }
+
+        .btn-secondary { background: white; border: 1px solid var(--border); padding: 8px 16px; border-radius: 8px; font-weight: 700; color: var(--text-main); cursor: pointer; }
+        
+        @media (max-width: 768px) {
+          .bulk-selectors { grid-template-columns: 1fr; }
+          .view-tabs { font-size: 0.8rem; }
+        }
         .sales-view { padding: 20px; max-width: 1000px; margin: 0 auto; }
         .section-header { margin-bottom: 24px; text-align: center; }
         .section-header h1 { font-size: 2.5rem; font-weight: 900; color: var(--text-main); letter-spacing: -1px; }

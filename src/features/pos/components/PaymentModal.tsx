@@ -11,6 +11,9 @@ interface PaymentModalProps {
   onFinalize: (method: string, invoiceNumber: number, dueDate?: string) => void;
   onClose: () => void;
   loading: boolean;
+  saleCategories: any[];
+  selectedSaleCategoryId: string | null;
+  onSelectCategory: (id: string | null) => void;
 }
 
 const PaymentModal: React.FC<PaymentModalProps> = ({ 
@@ -20,7 +23,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   onSelectCustomer, 
   onFinalize, 
   onClose,
-  loading
+  loading,
+  saleCategories,
+  selectedSaleCategoryId,
+  onSelectCategory
 }) => {
   const [method, setMethod] = useState<string | null>(null);
   const [cashAmount, setCashAmount] = useState<string>('');
@@ -110,6 +116,22 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 <option value="">Consumidor Final</option>
                 {customers.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="category-selection-final fade-in">
+            <label className="section-label">Categoria da Nota</label>
+            <div className={`customer-box ${selectedSaleCategoryId ? 'active' : ''}`}>
+              <QrCode size={18} />
+              <select 
+                value={selectedSaleCategoryId || ''} 
+                onChange={(e) => onSelectCategory(e.target.value || null)}
+              >
+                <option value="">Sem Categoria</option>
+                {saleCategories.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
             </div>

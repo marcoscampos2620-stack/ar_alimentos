@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { supabase } from '../../config/supabase';
-import { Search, ShoppingCart, Trash2, X } from 'lucide-react';
+import { Search, ShoppingCart, Trash2, X, ChevronRight } from 'lucide-react';
 
 // Components
 import CategoryFilter from './components/CategoryFilter';
@@ -46,8 +46,10 @@ const POSView: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   
-  // Fluxo de tipo de venda: choosing | selectingCustomer | registeringCustomer | active
-  const [saleMode, setSaleMode] = useState<'choosing' | 'selectingCustomer' | 'registeringCustomer' | 'active'>('choosing');
+  // Fluxo de tipo de venda: choosing | selectingCustomer | registeringCustomer | selectingCategory | active
+  const [saleMode, setSaleMode] = useState<'choosing' | 'selectingCustomer' | 'registeringCustomer' | 'selectingCategory' | 'active'>('choosing');
+  const [saleCategories, setSaleCategories] = useState<any[]>([]);
+  const [selectedSaleCategoryId, setSelectedSaleCategoryId] = useState<string | null>(null);
   const [selectedCustomerName, setSelectedCustomerName] = useState<string>('');
 
   // UI States
@@ -55,6 +57,7 @@ const POSView: React.FC = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+  const [categorySearchTerm, setCategorySearchTerm] = useState('');
   const [showCartSummary, setShowCartSummary] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
@@ -76,15 +79,17 @@ const POSView: React.FC = () => {
   }, []);
 
   const fetchData = async () => {
-    const [pRes, cRes, custRes] = await Promise.all([
+    const [pRes, cRes, custRes, catSalesRes] = await Promise.all([
       supabase.from('products').select('*').order('name'),
       supabase.from('categories').select('*').order('name'),
-      supabase.from('customers').select('id, name').order('name')
+      supabase.from('customers').select('id, name').order('name'),
+      supabase.from('sale_categories').select('*').order('name')
     ]);
 
     if (pRes.data) setProducts(pRes.data);
     if (cRes.data) setCategories(cRes.data);
     if (custRes.data) setCustomers(custRes.data);
+    if (catSalesRes.data) setSaleCategories(catSalesRes.data);
   };
 
   const addToCart = (product: Product, quantity: number) => {
@@ -122,7 +127,8 @@ const POSView: React.FC = () => {
           total_amount: total, 
           payment_method: method,
           customer_id: selectedCustomer || null,
-          invoice_number: invoiceNumber
+          invoice_number: invoiceNumber,
+          category_id: selectedSaleCategoryId
         }])
         .select()
         .single();
@@ -183,6 +189,7 @@ const POSView: React.FC = () => {
       setCart([]);
       setSelectedCustomer('');
       setSelectedCustomerName('');
+      setSelectedSaleCategoryId(null);
       setShowPayment(false);
       setShowCartSummary(false);
       fetchData();
@@ -210,11 +217,101 @@ const POSView: React.FC = () => {
           onQuickSale={() => {
             setSelectedCustomer('');
             setSelectedCustomerName('');
-            setSaleMode('active');
+            setSaleMode('selectingCategory');
           }}
           onCustomerSale={() => setSaleMode('selectingCustomer')}
           onClose={() => setSaleMode('active')}
         />
+      )}
+
+      {/* Seleção de Categoria de Venda - Redesign Moderno/Ágil */}
+      {saleMode === 'selectingCategory' && (
+        <div className="modal-overlay fade-in category-selection-overlay">
+          <div className="modern-selection-view slide-up shadow-2xl">
+            <div className="selection-header-premium">
+              <div className="header-top-row">
+                <button className="btn-back-minimal" onClick={() => setSaleMode('choosing')}>
+                  <ChevronRight className="rotate-180" size={24} />
+                </button>
+                <div className="drag-handle-mini" />
+                <button className="btn-skip-header" onClick={() => {
+                  setSelectedSaleCategoryId(null);
+                  setSaleMode('active');
+                  setCategorySearchTerm('');
+                }}>
+                  Pular
+                </button>
+              </div>
+              
+              <h3>Categoria da Venda</h3>
+              <p>Otimize sua gestão classificando esta transação</p>
+
+              <div className="category-search-bar">
+                <Search size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Buscar categoria..." 
+                  value={categorySearchTerm}
+                  onChange={(e) => setCategorySearchTerm(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </div>
+            
+            <div className="selection-body-scrollable">
+              {saleCategories.length === 0 ? (
+                <div className="empty-selection-state">
+                  <ShoppingCart size={40} className="muted-icon" />
+                  <p>Nenhuma categoria encontrada.</p>
+                  <button className="btn-primary btn-cta" onClick={() => setSaleMode('active')}>
+                    Pular e Iniciar Venda
+                  </button>
+                </div>
+              ) : (
+                <div className="selection-options-list">
+                  {saleCategories
+                    .filter(c => c.name.toLowerCase().includes(categorySearchTerm.toLowerCase()))
+                    .map(cat => (
+                      <button 
+                        key={cat.id} 
+                        className="category-tile-btn"
+                        onClick={() => {
+                          setSelectedSaleCategoryId(cat.id);
+                          setSaleMode('active');
+                          setCategorySearchTerm('');
+                        }}
+                      >
+                        <div className="tile-icon">
+                          {cat.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="tile-content">
+                          <span className="tile-name">{cat.name}</span>
+                          <span className="tile-hint">Clique para selecionar</span>
+                        </div>
+                        <ChevronRight size={18} className="tile-arrow" />
+                      </button>
+                    ))}
+                  
+                  {saleCategories.filter(c => c.name.toLowerCase().includes(categorySearchTerm.toLowerCase())).length === 0 && (
+                     <div className="no-results-state">
+                        <p>Nenhum resultado para "{categorySearchTerm}"</p>
+                     </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="selection-footer-premium">
+              <button className="btn-skip-modern" onClick={() => {
+                setSelectedSaleCategoryId(null);
+                setSaleMode('active');
+                setCategorySearchTerm('');
+              }}>
+                Continuar sem categoria
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Busca/Seleção de cliente cadastrado */}
@@ -223,7 +320,7 @@ const POSView: React.FC = () => {
           onSelect={(id, name) => {
             setSelectedCustomer(id);
             setSelectedCustomerName(name);
-            setSaleMode('active');
+            setSaleMode('selectingCategory');
           }}
           onNewCustomer={() => setSaleMode('registeringCustomer')}
           onBack={() => setSaleMode('choosing')}
@@ -237,7 +334,7 @@ const POSView: React.FC = () => {
           onCustomerCreated={(customerId, customerName) => {
             setSelectedCustomer(customerId);
             setSelectedCustomerName(customerName);
-            setSaleMode('active');
+            setSaleMode('selectingCategory');
             fetchData();
           }}
         />
@@ -249,7 +346,14 @@ const POSView: React.FC = () => {
           {/* Indicador de cliente selecionado */}
           {selectedCustomerName && (
             <div className="customer-banner fade-in">
-              <span>👤 Cliente: <strong>{selectedCustomerName}</strong></span>
+              <div className="banner-info">
+                <span>👤 Cliente: <strong>{selectedCustomerName}</strong></span>
+                {selectedSaleCategoryId && (
+                  <span className="sale-type-tag">
+                    🏷️ {saleCategories.find(c => c.id === selectedSaleCategoryId)?.name}
+                  </span>
+                )}
+              </div>
               <button 
                 onClick={() => { 
                   setSelectedCustomer(''); 
@@ -386,6 +490,9 @@ const POSView: React.FC = () => {
           onFinalize={(method, invNum, date) => handleFinalize(method, invNum, date)}
           onClose={() => setShowPayment(false)}
           loading={isFinishing}
+          saleCategories={saleCategories}
+          selectedSaleCategoryId={selectedSaleCategoryId}
+          onSelectCategory={setSelectedSaleCategoryId}
         />
       )}
 
@@ -439,7 +546,192 @@ const POSView: React.FC = () => {
           font-weight: 600;
           color: #1e40af;
         }
-        .customer-banner button {
+
+        .banner-info { display: flex; align-items: center; gap: 12px; }
+        .sale-type-tag { background: #1e40af; color: white; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem; text-transform: uppercase; }
+
+        /* Estilos Nova Seleção de Categoria */
+        .category-selection-card {
+          width: 90%;
+          max-width: 450px;
+          background: white;
+          border-radius: 24px;
+          padding: 30px;
+          text-align: center;
+          animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .modal-header-premium { margin-bottom: 24px; }
+        .modal-header-premium h3 { font-size: 1.5rem; font-weight: 900; color: var(--text-main); margin: 12px 0 4px; }
+        .modal-header-premium p { color: var(--text-muted); font-size: 0.9rem; font-weight: 600; }
+        .icon-box { 
+          width: 64px; height: 64px; background: #eff6ff; color: #2563eb; 
+          border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto;
+        }
+        
+        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        .option-btn {
+          display: flex; align-items: center; gap: 10px; padding: 16px; 
+          background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px;
+          font-weight: 700; color: var(--text-main); cursor: pointer; transition: 0.2s;
+        }
+        .option-btn:hover { background: white; border-color: #2563eb; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1); }
+        .option-btn .dot { width: 8px; height: 8px; background: #cbd5e1; border-radius: 50%; }
+        .option-btn:hover .dot { background: #2563eb; }
+        
+        .btn-link { background: none; border: none; color: var(--text-muted); font-weight: 700; font-size: 0.9rem; cursor: pointer; text-decoration: underline; }
+        .btn-link:hover { color: var(--primary); }
+
+        .empty-state-mini { padding: 20px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+
+        @keyframes slideUp {
+          from { transform: translateY(30px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+
+        /* Redesign Moderno Seleção de Categoria */
+        .category-selection-overlay {
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: flex-end;
+          justify-content: center;
+          padding: 0;
+        }
+
+        .modern-selection-view {
+          width: 100%;
+          max-width: 500px;
+          background: white;
+          border-top-left-radius: 32px;
+          border-top-right-radius: 32px;
+          height: 85vh;
+          display: flex;
+          flex-direction: column;
+          animation: slideUpSheet 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+          overflow: hidden;
+        }
+
+        @keyframes slideUpSheet {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+
+        .selection-header-premium {
+          padding: 16px 24px 24px;
+          border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .header-top-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 20px;
+        }
+        .drag-handle-mini { width: 36px; height: 5px; background: #e2e8f0; border-radius: 100px; }
+        .btn-back-minimal { background: none; border: none; color: #64748b; padding: 4px; cursor: pointer; }
+        .spacer-mini { width: 32px; }
+
+        .selection-header-premium h3 { font-size: 1.6rem; font-weight: 900; color: #1e293b; margin-bottom: 4px; }
+        .selection-header-premium p { font-size: 0.95rem; color: #64748b; font-weight: 500; margin-bottom: 24px; }
+
+        .btn-skip-header { 
+          background: #f8fafc; color: #64748b; border: none; 
+          padding: 6px 14px; border-radius: 12px; font-weight: 800; 
+          font-size: 0.85rem; cursor: pointer; text-transform: uppercase;
+        }
+        .btn-skip-header:hover { background: #f1f5f9; color: #1e293b; }
+
+        .category-search-bar {
+          background: #f1f5f9;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 14px 20px;
+          border-radius: 16px;
+          transition: 0.2s;
+        }
+        .category-search-bar:focus-within { background: white; box-shadow: 0 0 0 2px #2563eb; }
+        .category-search-bar input { background: none; border: none; outline: none; flex: 1; font-size: 1rem; font-weight: 600; color: #1e293b; }
+
+        .selection-body-scrollable {
+          flex: 1;
+          overflow-y: auto;
+          padding: 16px 24px;
+        }
+
+        .selection-options-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .category-tile-btn {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 12px;
+          background: white;
+          border: 1px solid #f1f5f9;
+          border-radius: 20px;
+          text-align: left;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .category-tile-btn:hover { background: #f8fafc; border-color: #cbd5e1; transform: scale(1.02); }
+        .category-tile-btn:active { transform: scale(0.98); }
+
+        .tile-icon {
+          width: 48px;
+          height: 48px;
+          background: #eff6ff;
+          color: #2563eb;
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 900;
+          font-size: 1.4rem;
+        }
+
+        .tile-content { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+        .tile-name { font-size: 1rem; font-weight: 800; color: #1e293b; }
+        .tile-hint { font-size: 0.75rem; color: #94a3b8; font-weight: 600; }
+        .tile-arrow { color: #cbd5e1; }
+
+        .selection-footer-premium {
+          padding: 24px 24px 40px; /* Mais espaço para não conflitar com nav bar mobile */
+          border-top: 1px solid #f1f5f9;
+          background: white;
+        }
+        .btn-skip-modern {
+          width: 100%;
+          padding: 16px;
+          background: #f8fafc;
+          border: none;
+          color: #64748b;
+          font-weight: 800;
+          font-size: 1rem;
+          border-radius: 16px;
+          cursor: pointer;
+        }
+        .btn-skip-modern:hover { background: #f1f5f9; color: #1e293b; }
+
+        .empty-selection-state, .no-results-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 16px;
+          padding: 40px 0;
+          color: #94a3b8;
+          font-weight: 600;
+        }
+        .muted-icon { opacity: 0.3; }
+        .btn-cta { padding: 12px 24px; margin-top: 8px; }
+
+        @media (min-width: 769px) {
+          .category-selection-overlay { align-items: center; }
+          .modern-selection-view { height: auto; max-height: 80vh; border-radius: 32px; }
+        }
           background: none;
           border: none;
           font-size: 1.1rem;
