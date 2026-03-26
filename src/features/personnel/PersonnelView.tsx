@@ -15,7 +15,8 @@ import {
   Key,
   Fingerprint,
   ChevronRight,
-  Edit3
+  Edit3,
+  Trash2
 } from 'lucide-react';
 import CustomersView from '../customers/CustomersView';
 
@@ -46,6 +47,7 @@ const PersonnelView: React.FC = () => {
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   // Form state
   const [newUsername, setNewUsername] = useState('');
@@ -157,6 +159,28 @@ const PersonnelView: React.FC = () => {
       fetchProfiles();
     } catch (err: any) {
       setNotification({ message: 'Erro na operação: ' + err.message, type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (profile: Profile) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-users', {
+        body: {
+          action: 'deleteUser',
+          userId: profile.user_id
+        }
+      });
+
+      if (error || data?.error) throw new Error(error?.message || data?.error);
+      
+      setNotification({ message: 'Usuário excluído com sucesso!', type: 'success' });
+      setDeletingUserId(null);
+      fetchProfiles();
+    } catch (err: any) {
+      setNotification({ message: 'Erro ao excluir: ' + err.message, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -360,7 +384,20 @@ const PersonnelView: React.FC = () => {
                       <button className="btn-edit-user" onClick={() => handleEditClick(p)} title="Editar Usuário">
                         <Edit3 size={18} />
                       </button>
+                      <button className="btn-delete-user" onClick={() => setDeletingUserId(p.id)} title="Excluir Usuário">
+                        <Trash2 size={18} />
+                      </button>
                     </div>
+
+                    {deletingUserId === p.id && (
+                      <div className="delete-confirm-inline fade-in">
+                        <span>Excluir <strong>@{p.username}</strong>?</span>
+                        <div className="delete-confirm-btns">
+                          <button className="btn-yes" onClick={() => handleDeleteUser(p)}>Sim</button>
+                          <button className="btn-no" onClick={() => setDeletingUserId(null)}>Não</button>
+                        </div>
+                      </div>
+                    )}
                     
                     <div className="user-card-perms">
                       <div className="perms-title-row">
@@ -523,6 +560,53 @@ const PersonnelView: React.FC = () => {
           background: var(--primary-light); 
           color: var(--primary);
           transform: scale(1.1);
+        }
+
+        .btn-delete-user {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          background: var(--bg-main);
+          color: var(--text-muted);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+        .btn-delete-user:hover {
+          background: #fee2e2;
+          color: #ef4444;
+          transform: scale(1.1);
+        }
+
+        .delete-confirm-inline {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 12px 16px;
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          border-radius: 12px;
+          font-size: 0.85rem;
+          font-weight: 600;
+          color: #991b1b;
+        }
+        .delete-confirm-btns { display: flex; gap: 8px; }
+        .delete-confirm-btns .btn-yes {
+          padding: 6px 16px;
+          background: #ef4444;
+          color: white;
+          border-radius: 8px;
+          font-weight: 800;
+          font-size: 0.8rem;
+        }
+        .delete-confirm-btns .btn-no {
+          padding: 6px 16px;
+          background: #f1f5f9;
+          color: var(--text-muted);
+          border-radius: 8px;
+          font-weight: 800;
+          font-size: 0.8rem;
         }
 
         .perms-title-row {

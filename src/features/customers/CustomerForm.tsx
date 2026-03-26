@@ -1,30 +1,53 @@
 import React, { useState } from 'react';
 import { supabase } from '../../config/supabase';
 
+interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+}
+
 interface CustomerFormProps {
+  customer?: Customer;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const CustomerForm: React.FC<CustomerFormProps> = ({ onClose, onSuccess }) => {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSuccess }) => {
+  const isEditing = !!customer;
+  const [name, setName] = useState(customer?.name || '');
+  const [phone, setPhone] = useState(customer?.phone || '');
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
 
-    const { error } = await supabase
-      .from('customers')
-      .insert([{ name, phone }]);
+    if (isEditing) {
+      const { error } = await supabase
+        .from('customers')
+        .update({ name, phone })
+        .eq('id', customer!.id);
 
-    if (!error) {
-      onSuccess();
-      onClose();
+      if (error) {
+        alert('Erro ao atualizar cliente: ' + error.message);
+        setSaving(false);
+        return;
+      }
     } else {
-      alert('Erro ao salvar cliente: ' + error.message);
+      const { error } = await supabase
+        .from('customers')
+        .insert([{ name, phone }]);
+
+      if (error) {
+        alert('Erro ao salvar cliente: ' + error.message);
+        setSaving(false);
+        return;
+      }
     }
+
+    onSuccess();
+    onClose();
     setSaving(false);
   };
 
@@ -52,7 +75,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ onClose, onSuccess }) => {
       <div className="form-actions">
         <button type="button" onClick={onClose} disabled={saving}>Cancelar</button>
         <button type="submit" className="btn-primary" disabled={saving}>
-          {saving ? 'Salvando...' : 'Salvar Cliente'}
+          {saving ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Salvar Cliente')}
         </button>
       </div>
     </form>

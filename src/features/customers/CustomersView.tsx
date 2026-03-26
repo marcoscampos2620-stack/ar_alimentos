@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { supabase } from '../../config/supabase';
-import { Plus, Search, Phone, ArrowLeft, ChevronRight, CheckCircle, AlertTriangle, Calendar, DollarSign } from 'lucide-react';
+import { Plus, Search, Phone, ArrowLeft, ChevronRight, CheckCircle, AlertTriangle, Calendar, DollarSign, Pencil, Trash2 } from 'lucide-react';
 import CustomerForm from './CustomerForm';
 import DebtDetailView from './DebtDetailView';
 
@@ -34,8 +34,10 @@ const CustomersView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [expandedCustomerId, setExpandedCustomerId] = useState<string | null>(null);
   const [selectedDebt, setSelectedDebt] = useState<{ debt: CustomerDebt; customerId: string; customerName: string } | null>(null);
+  const [deletingCustomerId, setDeletingCustomerId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -99,6 +101,33 @@ const CustomersView: React.FC = () => {
     setExpandedCustomerId(expandedCustomerId === customerId ? null : customerId);
   };
 
+  const handleEditCustomer = (customer: Customer) => {
+    setEditingCustomer(customer);
+    setShowForm(true);
+  };
+
+  const handleDeleteCustomer = async (customer: Customer) => {
+    try {
+      // 1. Desvincular das vendas (set null)
+      await supabase.from('sales').update({ customer_id: null }).eq('customer_id', customer.id);
+      
+      // 2. Deletar pagamentos de dívida
+      await supabase.from('debt_payments').delete().eq('customer_id', customer.id);
+      
+      // 3. Deletar dívidas
+      await supabase.from('customer_debts').delete().eq('customer_id', customer.id);
+
+      // 4. Deletar cliente
+      const { error } = await supabase.from('customers').delete().eq('id', customer.id);
+      if (error) throw error;
+      
+      setDeletingCustomerId(null);
+      fetchCustomers();
+    } catch (error: any) {
+      alert('Erro ao excluir cliente: ' + error.message);
+    }
+  };
+
   if (selectedDebt) {
     return (
       <DebtDetailView
@@ -115,17 +144,19 @@ const CustomersView: React.FC = () => {
     return (
       <div className="form-view fade-in">
         <div className="form-header-v2">
-          <button className="btn-back" onClick={() => setShowForm(false)}>
+          <button className="btn-back" onClick={() => { setShowForm(false); setEditingCustomer(null); }}>
             <ArrowLeft size={20} />
           </button>
-          <h2>Novo Cliente</h2>
+          <h2>{editingCustomer ? 'Editar Cliente' : 'Novo Cliente'}</h2>
         </div>
         <div className="form-view-content">
           <CustomerForm
-            onClose={() => setShowForm(false)}
+            customer={editingCustomer || undefined}
+            onClose={() => { setShowForm(false); setEditingCustomer(null); }}
             onSuccess={() => {
               fetchCustomers();
               setShowForm(false);
+              setEditingCustomer(null);
             }}
           />
         </div>
@@ -137,7 +168,7 @@ const CustomersView: React.FC = () => {
     <div className="view fade-in">
       <div className="view-header">
         <h2>Clientes / Fiados</h2>
-        <button className="btn-primary" onClick={() => setShowForm(true)}>
+        <button className="btn-primary" onClick={() => { setEditingCustomer(null); setShowForm(true); }}>
           <Plus size={20} />
           Novo Cliente
         </button>
@@ -182,6 +213,22 @@ const CustomersView: React.FC = () => {
                     <span className="customer-phone">
                       <Phone size={12} /> {customer.phone || 'Sem telefone'}
                     </span>
+                    <div className="customer-actions-inline">
+                      <button className="btn-action-sm edit" onClick={(e) => { e.stopPropagation(); handleEditCustomer(customer); }} title="Editar">
+                        <Pencil size={14} />
+                      </button>
+                      {deletingCustomerId === customer.id ? (
+                        <div className="delete-inline-confirm" onClick={(e) => e.stopPropagation()}>
+                          <span>Excluir?</span>
+                          <button className="btn-yes-sm" onClick={() => handleDeleteCustomer(customer)}>Sim</button>
+                          <button className="btn-no-sm" onClick={() => setDeletingCustomerId(null)}>Não</button>
+                        </div>
+                      ) : (
+                        <button className="btn-action-sm delete" onClick={(e) => { e.stopPropagation(); setDeletingCustomerId(customer.id); }} title="Excluir">
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
                     <div className="customer-stats">
                       <span className="stat-pill normal">
                         <DollarSign size={12} />
@@ -304,6 +351,68 @@ const CustomersView: React.FC = () => {
         }
         .customer-phone { font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
         
+        .customer-actions-inline {
+          display: flex;
+          gap: 8px;
+          margin-top: 4px;
+        }
+        .btn-action-sm {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid var(--border);
+          background: white;
+          color: var(--text-muted);
+          transition: all 0.2s;
+          cursor: pointer;
+        }
+        .btn-action-sm:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        }
+        .btn-action-sm.edit:hover {
+          color: var(--primary);
+          border-color: var(--primary-light);
+          background: #eff6ff;
+        }
+        .btn-action-sm.delete:hover {
+          color: #ef4444;
+          border-color: #fecaca;
+          background: #fef2f2;
+        }
+
+        .delete-inline-confirm {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: #fef2f2;
+          padding: 4px 8px;
+          border-radius: 10px;
+          border: 1px solid #fecaca;
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: #991b1b;
+          animation: slideInRight 0.2s ease-out;
+        }
+        .btn-yes-sm, .btn-no-sm {
+          padding: 4px 10px;
+          border-radius: 6px;
+          font-size: 0.7rem;
+          font-weight: 800;
+          cursor: pointer;
+          border: none;
+        }
+        .btn-yes-sm { background: #ef4444; color: white; }
+        .btn-no-sm { background: #f1f5f9; color: var(--text-muted); }
+
+        @keyframes slideInRight {
+          from { opacity: 0; transform: translateX(10px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+
         .customer-stats { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
         .stat-pill {
           display: flex;
