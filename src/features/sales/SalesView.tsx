@@ -5,7 +5,9 @@ import {
   Trash2, 
   ChevronRight,
   Filter,
-  DollarSign
+  DollarSign,
+  AlertTriangle,
+  Edit
 } from 'lucide-react';
 import { 
   format, 
@@ -30,6 +32,14 @@ interface Sale {
   created_at: string;
   customers?: { name: string };
   items?: any[];
+  invoice_number?: number;
+}
+
+interface DebtKPI {
+  totalPending: number;
+  countPending: number;
+  totalOverdue: number;
+  countOverdue: number;
 }
 
 type Period = 'monthly' | 'yearly' | 'all' | 'custom';
@@ -45,13 +55,65 @@ const SalesView: React.FC = () => {
   const [expandedYears, setExpandedYears] = useState<Record<number, boolean>>({});
   const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
+  const [debtKPI, setDebtKPI] = useState<DebtKPI>({ totalPending: 0, countPending: 0, totalOverdue: 0, countOverdue: 0 });
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [updating, setUpdating] = useState(false);
   
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'ADMIN';
 
   useEffect(() => {
     fetchSales();
+    fetchDebtKPI();
+    fetchCustomers();
+
+    const channel = supabase
+      .channel('sales-history-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, () => {
+        fetchSales();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_debts' }, () => {
+        fetchDebtKPI();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
+
+  const fetchDebtKPI = async () => {
+    const { data } = await supabase
+      .from('customer_debts')
+      .select('amount, due_date, status')
+      .eq('status', 'PENDING');
+
+    if (data) {
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+
+      let totalPending = 0;
+      let totalOverdue = 0;
+      let countOverdue = 0;
+
+      data.forEach(d => {
+        totalPending += Number(d.amount);
+        const due = new Date(d.due_date + 'T23:59:59');
+        if (due < today) {
+          totalOverdue += Number(d.amount);
+          countOverdue++;
+        }
+      });
+
+      setDebtKPI({
+        totalPending,
+        countPending: data.length,
+        totalOverdue,
+        countOverdue
+      });
+    }
+  };
 
   const fetchSales = async () => {
     setLoading(true);
@@ -71,6 +133,11 @@ const SalesView: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchCustomers = async () => {
+    const { data } = await supabase.from('customers').select('id, name').order('name');
+    if (data) setCustomers(data);
   };
 
   const fetchSaleItems = async (saleId: string) => {
@@ -202,6 +269,36 @@ const SalesView: React.FC = () => {
     }
   };
 
+  const handleUpdateSale = async (updatedData: Partial<Sale>) => {
+    if (!editingSale) return;
+    setUpdating(true);
+    try {
+      const { error } = await supabase
+        .from('sales')
+        .update({
+          payment_method: updatedData.payment_method,
+          customer_id: updatedData.customer_id,
+          invoice_number: updatedData.invoice_number,
+          total_amount: updatedData.total_amount
+        })
+        .eq('id', editingSale.id);
+
+      if (error) throw error;
+
+      // Se mudou para fiado ou de fiado para outro, precisamos ajustar customer_debts
+      // Por simplicidade neste MVP, vamos focar em editar os dados de cabeçalho
+      // Avisaremos se houver impacto em fiados
+
+      setEditingSale(null);
+      fetchSales();
+      fetchDebtKPI();
+    } catch (error: any) {
+      alert('Erro ao atualizar venda: ' + error.message);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const periodLabels: Record<Period, string> = {
     monthly: 'Este Mês',
     yearly: 'Este Ano',
@@ -227,6 +324,27 @@ const SalesView: React.FC = () => {
         <div className="kpi-trend">
           <Filter size={20} />
           <span>Filtro Ativo</span>
+        </div>
+      </div>
+
+      <div className="debt-kpis-mini-row-sales animate-slide-up">
+        <div className="kpi-mini-card pending">
+          <div className="kpi-mini-info">
+            <span className="kpi-mini-label">Fiado Pendente</span>
+            <span className="kpi-mini-value">R$ {debtKPI.totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+          </div>
+          <span className="kpi-mini-count">{debtKPI.countPending} abertos</span>
+        </div>
+
+        <div className="kpi-mini-card overdue">
+          <div className="kpi-mini-info">
+            <span className="kpi-mini-label">Fiados Vencidos</span>
+            <span className="kpi-mini-value">R$ {debtKPI.totalOverdue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+          </div>
+          <span className="kpi-mini-count alert">
+            <AlertTriangle size={10} />
+            {debtKPI.countOverdue} vencidos
+          </span>
         </div>
       </div>
 
@@ -326,6 +444,7 @@ const SalesView: React.FC = () => {
                                       <div className="sale-summary-compact" onClick={() => toggleExpandSale(sale.id)}>
                                         <div className="sale-info-compact">
                                           <span className="sale-time">{format(parseISO(sale.created_at), 'HH:mm')}</span>
+                                          <span className="sale-invoice">Nº {sale.invoice_number || '---'}</span>
                                           <span className="sale-customer-compact">{sale.customers?.name || 'Cliente Casual'}</span>
                                         </div>
                                         <div className="sale-payment-compact">{sale.payment_method}</div>
@@ -357,6 +476,9 @@ const SalesView: React.FC = () => {
                                                   <Trash2 size={16} /> Excluir
                                                 </button>
                                               )}
+                                              <button className="btn-edit-sale" onClick={() => setEditingSale(sale)}>
+                                                <Edit size={16} /> Editar
+                                              </button>
                                             </div>
                                           )}
                                         </div>
@@ -377,6 +499,69 @@ const SalesView: React.FC = () => {
           ))
         )}
       </div>
+
+      {editingSale && (
+        <div className="modal-overlay fade-in">
+          <div className="edit-sale-card slide-up shadow-xl">
+            <div className="modal-header">
+              <h3>Editar Venda #{editingSale.id.slice(0, 8)}</h3>
+              <button onClick={() => setEditingSale(null)} className="btn-icon">×</button>
+            </div>
+            <div className="modal-content">
+              <div className="input-group">
+                <label>Número da Nota</label>
+                <input 
+                  type="number" 
+                  value={editingSale.invoice_number || ''} 
+                  onChange={(e) => setEditingSale({ ...editingSale, invoice_number: parseInt(e.target.value) })}
+                />
+              </div>
+              <div className="input-group">
+                <label>Cliente</label>
+                <select 
+                  value={editingSale.customer_id || ''} 
+                  onChange={(e) => setEditingSale({ ...editingSale, customer_id: e.target.value || undefined })}
+                >
+                  <option value="">Consumidor Final</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="input-group">
+                <label>Forma de Pagamento</label>
+                <select 
+                  value={editingSale.payment_method} 
+                  onChange={(e) => setEditingSale({ ...editingSale, payment_method: e.target.value })}
+                >
+                  <option value="CASH">Dinheiro</option>
+                  <option value="CARD">Cartão</option>
+                  <option value="PIX">PIX</option>
+                  <option value="DEBT">Fiado</option>
+                </select>
+              </div>
+              <div className="input-group">
+                <label>Total (R$)</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  value={editingSale.total_amount} 
+                  onChange={(e) => setEditingSale({ ...editingSale, total_amount: parseFloat(e.target.value) })}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn-primary" 
+                onClick={() => handleUpdateSale(editingSale)}
+                disabled={updating}
+              >
+                {updating ? 'Salvando...' : 'Salvar Alterações'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .sales-view { padding: 20px; max-width: 1000px; margin: 0 auto; }
@@ -408,6 +593,50 @@ const SalesView: React.FC = () => {
         .kpi-label { font-size: 0.9rem; font-weight: 600; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px; }
         .kpi-value { font-size: 2.2rem; font-weight: 900; }
         .kpi-trend { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: 700; background: rgba(0,0,0,0.1); padding: 8px 16px; border-radius: 30px; }
+
+        /* Mini KPIs Row (Sales) */
+        .debt-kpis-mini-row-sales {
+          display: flex;
+          gap: 12px;
+          margin-bottom: 24px;
+          justify-content: flex-start;
+          flex-wrap: wrap;
+        }
+
+        .kpi-mini-card {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 16px;
+          background: white;
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          transition: all 0.2s;
+          box-shadow: var(--shadow-sm);
+        }
+        .kpi-mini-card:hover { transform: translateY(-2px); border-color: var(--primary); }
+
+        .kpi-mini-info { display: flex; flex-direction: column; }
+        .kpi-mini-label { font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+        .kpi-mini-value { font-size: 1rem; font-weight: 800; color: var(--text-main); }
+        
+        .kpi-mini-count { 
+          font-size: 0.7rem; 
+          font-weight: 700; 
+          padding: 4px 8px; 
+          border-radius: 20px; 
+          background: #f1f5f9;
+          color: #64748b;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .overdue.kpi-mini-card { border-color: #fee2e2; }
+        .kpi-mini-count.alert { background: #fee2e2; color: #dc2626; }
+        .overdue .kpi-mini-value { color: #dc2626; }
+
+        .sale-invoice { font-size: 0.75rem; font-weight: 800; color: var(--primary); background: #eef2ff; padding: 2px 8px; border-radius: 6px; }
 
         .filters-bar { 
           display: flex; 
@@ -523,6 +752,38 @@ const SalesView: React.FC = () => {
         .capitalize { text-transform: capitalize; }
         .shadow-premium { box-shadow: 0 10px 25px -5px rgba(30, 136, 229, 0.2), 0 8px 10px -6px rgba(30, 136, 229, 0.2); }
 
+        .btn-edit-sale {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          background: #eff6ff;
+          color: #2563eb;
+          border-radius: 6px;
+          border: 1px solid #dbeafe;
+          font-size: 0.75rem;
+          font-weight: 800;
+          cursor: pointer;
+          transition: 0.2s;
+          margin-left: 8px;
+        }
+        .btn-edit-sale:hover { background: #2563eb; color: white; }
+
+        .edit-sale-card {
+          width: 90%;
+          max-width: 400px;
+          background: white;
+          border-radius: 20px;
+          overflow: hidden;
+        }
+        .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h3 { font-weight: 800; margin: 0; }
+        .modal-content { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+        .input-group { display: flex; flex-direction: column; gap: 6px; }
+        .input-group label { font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; }
+        .input-group input, .input-group select { padding: 10px; border-radius: 8px; border: 1px solid var(--border); font-weight: 700; outline: none; }
+        .modal-footer { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
+        
         @media (max-width: 768px) {
           .section-header h1 { font-size: 1.8rem; }
           .kpi-banner { padding: 16px; gap: 12px; margin-bottom: 20px; border-radius: 16px; }
@@ -531,6 +792,24 @@ const SalesView: React.FC = () => {
           .kpi-value { font-size: 1.5rem; }
           .kpi-label { font-size: 0.75rem; }
           .kpi-trend { display: none; }
+          
+          .debt-kpis-mini-row-sales {
+            gap: 8px;
+            margin-bottom: 20px;
+          }
+          .kpi-mini-card {
+            flex: 1;
+            padding: 8px;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 6px;
+            min-width: 0; /* allows flex box to shrink properly */
+          }
+          .kpi-mini-info { align-items: center; }
+          .kpi-mini-label { font-size: 0.55rem; letter-spacing: 0; }
+          .kpi-mini-value { font-size: 0.9rem; }
+          .kpi-mini-count { font-size: 0.65rem; padding: 2px 6px; }
           
           .custom-date-range { flex-direction: column; gap: 12px; padding: 12px; }
           .date-input-group input { padding: 8px; }

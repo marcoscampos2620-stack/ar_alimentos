@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../config/supabase';
-import { Plus, Check, X, Upload, Image as ImageIcon } from 'lucide-react';
+import { Plus, Check, X, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { storageService } from '../../services/storageService';
 
 interface Category {
   id: string;
@@ -82,26 +83,26 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
 
     setUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-      const filePath = `products/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('products')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('products')
-        .getPublicUrl(filePath);
-
+      // Se já houver uma imagem de upload (não externa), poderíamos deletar a antiga aqui
+      // mas para simplificar e evitar erros de permissão se o bucket for novo, apenas fazemos o upload
+      const publicUrl = await storageService.uploadImage('products', 'items', file);
       setImageUrl(publicUrl);
     } catch (error: any) {
-      alert('Erro no upload: ' + error.message);
+      alert(error.message);
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleRemoveImage = async () => {
+    if (!imageUrl) return;
+    
+    // Se for um URL do nosso bucket, tentamos deletar
+    if (imageUrl.includes('/storage/v1/object/public/products/')) {
+      await storageService.deleteImageByUrl('products', imageUrl);
+    }
+    
+    setImageUrl('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -270,7 +271,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
             {imageUrl ? (
               <div className="image-preview-v2">
                 <img src={imageUrl} alt="Preview" />
-                <button type="button" className="btn-remove-img" onClick={() => setImageUrl('')}>
+                <button type="button" className="btn-remove-img" onClick={handleRemoveImage}>
                   <X size={14} />
                 </button>
               </div>
@@ -282,7 +283,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
                 onClick={() => fileInputRef.current?.click()}
               >
                 {uploading ? (
-                  <span className="spinner"></span>
+                  <Loader2 className="animate-spin" size={20} />
                 ) : (
                   <>
                     <Upload size={20} />

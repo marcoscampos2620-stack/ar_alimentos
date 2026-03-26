@@ -16,6 +16,7 @@ import {
   X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { storageService } from '../../services/storageService';
 import ProductForm from './ProductForm';
 import StockMovementForm from './StockMovementForm';
 import MovementsList from './MovementsList';
@@ -91,10 +92,16 @@ const InventoryView: React.FC = () => {
     }
   };
 
-  const handleDeleteProduct = async (id: string) => {
+  const handleDeleteProduct = async (product: Product) => {
     try {
-      const { error } = await supabase.from('products').delete().eq('id', id);
+      const { error } = await supabase.from('products').delete().eq('id', product.id);
       if (error) throw error;
+
+      // Se tiver imagem e for do nosso bucket, deletamos do storage
+      if (product.image_url && product.image_url.includes('/storage/v1/object/public/products/')) {
+        await storageService.deleteImageByUrl('products', product.image_url);
+      }
+
       setDeletingProductId(null);
       fetchProducts();
     } catch (error: any) {
@@ -243,7 +250,7 @@ const InventoryView: React.FC = () => {
                           <div className="admin-actions-v2">
                             {deletingProductId === product.id ? (
                               <div className="delete-confirm-compact animate-fade-in">
-                                <button className="btn-confirm-v2 yes" onClick={() => handleDeleteProduct(product.id)}>Sim</button>
+                                <button className="btn-confirm-v2 yes" onClick={() => handleDeleteProduct(product)}>Sim</button>
                                 <button className="btn-confirm-v2 no" onClick={() => setDeletingProductId(null)}>Não</button>
                               </div>
                             ) : pausingProductId === product.id ? (

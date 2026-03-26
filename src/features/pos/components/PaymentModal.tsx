@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, CreditCard, Banknote, QrCode, User, Check } from 'lucide-react';
+import { supabase } from '../../../config/supabase';
 
 interface PaymentModalProps {
   total: number;
   selectedCustomerId: string;
   customers: any[];
   onSelectCustomer: (id: string) => void;
-  onFinalize: (method: string, dueDate?: string) => void;
+  onFinalize: (method: string, invoiceNumber: number, dueDate?: string) => void;
   onClose: () => void;
   loading: boolean;
 }
@@ -24,6 +25,32 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [cashAmount, setCashAmount] = useState<string>('');
   const [change, setChange] = useState<number>(0);
   const [dueDate, setDueDate] = useState<string>('');
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+  const [fetchingInvoice, setFetchingInvoice] = useState(false);
+
+  useEffect(() => {
+    fetchNextInvoice();
+  }, []);
+
+  const fetchNextInvoice = async () => {
+    setFetchingInvoice(true);
+    try {
+      const { data, error } = await supabase
+        .from('sales')
+        .select('invoice_number')
+        .order('invoice_number', { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+      
+      const lastNumber = data && data.length > 0 && data[0].invoice_number ? Number(data[0].invoice_number) : 0;
+      setInvoiceNumber((lastNumber + 1).toString());
+    } catch (err) {
+      console.error('Erro ao buscar última nota:', err);
+    } finally {
+      setFetchingInvoice(false);
+    }
+  };
 
   useEffect(() => {
     if (method === 'CASH' && cashAmount) {
@@ -41,7 +68,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const canFinalize = method && (method !== 'CASH' || (parseFloat(cashAmount) >= total)) && (method !== 'DEBT' || dueDate);
 
   const handleFinalize = () => {
-    if (method) onFinalize(method, method === 'DEBT' ? dueDate : undefined);
+    if (method && invoiceNumber) {
+      onFinalize(method, parseInt(invoiceNumber), method === 'DEBT' ? dueDate : undefined);
+    }
   };
 
   return (
@@ -56,6 +85,20 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           <div className="total-display glass">
             <span className="label">Total a Pagar</span>
             <span className="value">R$ {total.toFixed(2)}</span>
+          </div>
+
+          <div className="invoice-selection fade-in">
+            <label className="section-label">Número da Nota</label>
+            <div className={`customer-box ${invoiceNumber ? 'active' : ''}`}>
+              <Banknote size={18} />
+              <input 
+                type="number" 
+                value={invoiceNumber} 
+                onChange={(e) => setInvoiceNumber(e.target.value)}
+                placeholder={fetchingInvoice ? "Carregando..." : "Nº da Nota"}
+                required
+              />
+            </div>
           </div>
 
           <div className="customer-selection">

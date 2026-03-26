@@ -110,7 +110,7 @@ const POSView: React.FC = () => {
     setCart(cart.filter(item => item.product.id !== productId));
   };
 
-  const handleFinalize = async (method: string, dueDate?: string) => {
+  const handleFinalize = async (method: string, invoiceNumber: number, dueDate?: string) => {
     if (cart.length === 0) return;
     setIsFinishing(true);
 
@@ -120,7 +120,8 @@ const POSView: React.FC = () => {
         .insert([{ 
           total_amount: total, 
           payment_method: method,
-          customer_id: selectedCustomer || null
+          customer_id: selectedCustomer || null,
+          invoice_number: invoiceNumber
         }])
         .select()
         .single();
@@ -381,7 +382,7 @@ const POSView: React.FC = () => {
           selectedCustomerId={selectedCustomer}
           customers={customers}
           onSelectCustomer={setSelectedCustomer}
-          onFinalize={handleFinalize}
+          onFinalize={(method, invNum, date) => handleFinalize(method, invNum, date)}
           onClose={() => setShowPayment(false)}
           loading={isFinishing}
         />
